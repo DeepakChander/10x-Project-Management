@@ -1,4 +1,4 @@
-import { Activity, CheckCircle2, Eye, ListTodo } from "lucide-react";
+import { Activity, CheckCircle2, Eye, Inbox, ListTodo } from "lucide-react";
 import { useRef } from "react";
 import { useDrop } from "react-dnd";
 import { cn } from "../../../ui/primitives/styles";
@@ -47,6 +47,12 @@ export const KanbanColumn = ({
   // Get icon and label based on status
   const getStatusInfo = () => {
     switch (status) {
+      case "backlog":
+        return {
+          icon: <Inbox className="w-3 h-3" />,
+          label: "Backlog",
+          color: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30",
+        };
       case "todo":
         return {
           icon: <ListTodo className="w-3 h-3" />,

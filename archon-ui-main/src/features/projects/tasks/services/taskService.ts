@@ -17,7 +17,7 @@ export const taskService = {
     try {
       const tasks = await callAPIWithETag<Task[]>(`/api/projects/${projectId}/tasks`);
 
-      // Return tasks as-is; UI uses DB status values (todo/doing/review/done)
+      // Return tasks as-is; UI uses DB status values (backlog/todo/doing/review/done)
       return tasks;
     } catch (error) {
       console.error(`Failed to get tasks for project ${projectId}:`, error);

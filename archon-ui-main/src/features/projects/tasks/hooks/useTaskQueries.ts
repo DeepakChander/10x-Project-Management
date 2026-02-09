@@ -67,7 +67,7 @@ export function useCreateTask() {
         project_id: newTaskData.project_id,
         title: newTaskData.title,
         description: newTaskData.description || "",
-        status: newTaskData.status ?? "todo",
+        status: newTaskData.status ?? "backlog",
         assignee: newTaskData.assignee ?? "User",
         feature: newTaskData.feature,
         task_order: newTaskData.task_order ?? 100,

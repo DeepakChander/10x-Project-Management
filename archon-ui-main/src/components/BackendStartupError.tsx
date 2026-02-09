@@ -33,7 +33,7 @@ export const BackendStartupError: React.FC = () => {
                 <div className="space-y-2 text-xs text-red-300">
                   <p>1. Open Docker Desktop</p>
                   <p>2. Go to Containers tab</p>
-                  <p>3. Look for the 10x server container (typically named <span className="text-red-400 font-semibold">archon-server</span> or similar)</p>
+                  <p>3. Look for the 10x server container (typically named <span className="text-red-400 font-semibold">10x-server</span> or similar)</p>
                   <p>4. View the logs for the specific error message</p>
                 </div>
               </div>

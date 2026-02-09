@@ -61,14 +61,11 @@ class ServiceDiscovery:
         self.environment = self._detect_environment()
         self._cache: dict[str, str] = {}
 
-    # Service name mappings
+    # Service name mappings (must match docker-compose.yml service names)
     SERVICE_NAMES = {
-        "api": "archon-server",
-        "mcp": "archon-mcp",
-        "agents": "archon-agents",
-        "archon-server": "archon-server",
-        "archon-mcp": "archon-mcp",
-        "archon-agents": "archon-agents",
+        "api": "server",
+        "mcp": "mcp",
+        "agents": "agents",
     }
 
     @staticmethod
@@ -90,7 +87,7 @@ class ServiceDiscovery:
             protocol: Protocol to use (default: "http")
 
         Returns:
-            Full service URL (e.g., "http://archon-api:8080")
+            Full service URL (e.g., "http://server:8181")
         """
         cache_key = f"{protocol}://{service}"
         if cache_key in self._cache:
@@ -174,7 +171,7 @@ class ServiceDiscovery:
         return {
             service: self.get_service_url(service)
             for service in self.SERVICE_NAMES.keys()
-            if not service.startswith("archon-")  # Skip duplicates
+            if service in self.DEFAULT_PORTS  # Only include services with known ports
         }
 
     @property

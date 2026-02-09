@@ -77,7 +77,7 @@ async def fetch_credentials_from_server():
                         "Please set it in your .env file or environment."
                     )
                 response = await client.get(
-                    f"http://archon-server:{server_port}/internal/credentials/agents", timeout=10.0
+                    f"http://server:{server_port}/internal/credentials/agents", timeout=10.0
                 )
                 response.raise_for_status()
                 credentials = response.json()
@@ -177,7 +177,7 @@ async def run_agent(request: AgentRequest):
         deps = {
             "context": request.context or {},
             "options": request.options or {},
-            "mcp_endpoint": os.getenv("MCP_SERVICE_URL", "http://archon-mcp:8051"),
+            "mcp_endpoint": os.getenv("MCP_SERVICE_URL", "http://mcp:8051"),
         }
 
         # Run the agent

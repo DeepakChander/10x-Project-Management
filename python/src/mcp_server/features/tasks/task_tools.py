@@ -70,7 +70,7 @@ def register_task_tools(mcp: FastMCP):
             query: Keyword search in title, description, feature (optional)
             task_id: Get specific task by ID (returns full details)
             filter_by: "status" | "project" | "assignee" (optional)
-            filter_value: Filter value (e.g., "todo", "doing", "review", "done")
+            filter_value: Filter value (e.g., "backlog", "todo", "doing", "review", "done")
             project_id: Project UUID (optional, for additional filtering)
             include_closed: Include done tasks in results
             page: Page number for pagination
@@ -207,7 +207,12 @@ def register_task_tools(mcp: FastMCP):
         status: str | None = None,
         assignee: str | None = None,
         task_order: int | None = None,
-        feature: str | None = None
+        priority: str | None = None,
+        feature: str | None = None,
+        reviewer_id: str | None = None,
+        story_points: int | None = None,
+        due_date: str | None = None,
+        created_by: str | None = None,
     ) -> str:
         """
         Manage tasks (consolidated: create/update/delete).
@@ -218,24 +223,32 @@ def register_task_tools(mcp: FastMCP):
         - Default to more granular tasks when project scope is unclear
         - Each task should represent 30 minutes to 4 hours of work
 
+        LIFECYCLE: Tasks follow backlog → todo → doing → review → done.
+        Any task can be reset to backlog. Use delete for archiving.
+
         Args:
             action: "create" | "update" | "delete"
             task_id: Task UUID for update/delete
             project_id: Project UUID for create
             title: Task title text
             description: Detailed task description with clear completion criteria
-            status: "todo" | "doing" | "review" | "done"
+            status: "backlog" | "todo" | "doing" | "review" | "done"
             assignee: String name of the assignee. Can be any agent name,
                      "User" for human assignment, or custom agent identifiers
                      created by your system (e.g., "ResearchAgent-1", "CodeReviewer").
                      Common values: "User", "Archon", "Coding Agent"
                      Default: "User"
             task_order: Priority 0-100 (higher = more priority)
+            priority: "low" | "medium" | "high" | "critical"
             feature: Feature label for grouping
+            reviewer_id: User/agent assigned to review
+            story_points: Effort estimate (1-13 Fibonacci)
+            due_date: Target completion date (ISO-8601)
+            created_by: Creator identifier (default: "User")
 
         Examples:
           manage_task("create", project_id="p-1", title="Research existing patterns", description="Study codebase for similar implementations")
-          manage_task("create", project_id="p-1", title="Write unit tests", description="Cover all edge cases with 80% coverage")
+          manage_task("create", project_id="p-1", title="Write unit tests", description="Cover all edge cases with 80% coverage", story_points=5)
           manage_task("update", task_id="t-1", status="doing", assignee="User")
           manage_task("delete", task_id="t-1")
 
@@ -254,9 +267,7 @@ def register_task_tools(mcp: FastMCP):
                             suggestion="Provide both project_id and title"
                         )
 
-                    response = await client.post(
-                        urljoin(api_url, "/api/tasks"),
-                        json={
+                    create_payload = {
                             "project_id": project_id,
                             "title": title,
                             "description": description or "",
@@ -265,7 +276,21 @@ def register_task_tools(mcp: FastMCP):
                             "feature": feature,
                             "sources": [],
                             "code_examples": [],
-                        },
+                        }
+                    if priority is not None:
+                        create_payload["priority"] = priority
+                    if reviewer_id is not None:
+                        create_payload["reviewer_id"] = reviewer_id
+                    if story_points is not None:
+                        create_payload["story_points"] = story_points
+                    if due_date is not None:
+                        create_payload["due_date"] = due_date
+                    if created_by is not None:
+                        create_payload["created_by"] = created_by
+
+                    response = await client.post(
+                        urljoin(api_url, "/api/tasks"),
+                        json=create_payload,
                     )
 
                     if response.status_code == 200:
@@ -305,8 +330,16 @@ def register_task_tools(mcp: FastMCP):
                         update_fields["assignee"] = assignee
                     if task_order is not None:
                         update_fields["task_order"] = task_order
+                    if priority is not None:
+                        update_fields["priority"] = priority
                     if feature is not None:
                         update_fields["feature"] = feature
+                    if reviewer_id is not None:
+                        update_fields["reviewer_id"] = reviewer_id
+                    if story_points is not None:
+                        update_fields["story_points"] = story_points
+                    if due_date is not None:
+                        update_fields["due_date"] = due_date
 
                     if not update_fields:
                         return MCPErrorFormatter.format_error(

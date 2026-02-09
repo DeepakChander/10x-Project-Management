@@ -23,7 +23,7 @@ def get_container_status() -> dict[str, Any]:
     docker_client = None
     try:
         docker_client = docker.from_env()
-        container = docker_client.containers.get("archon-mcp")
+        container = docker_client.containers.get("10x-mcp")
 
         # Get container status
         container_status = container.status
@@ -56,7 +56,7 @@ def get_container_status() -> dict[str, Any]:
             "uptime": None,
             "logs": [],
             "container_status": "not_found",
-            "message": "MCP container not found. Run: docker compose up -d archon-mcp"
+            "message": "MCP container not found. Run: docker compose up -d mcp"
         }
     except Exception as e:
         api_logger.error("Failed to get container status", exc_info=True)

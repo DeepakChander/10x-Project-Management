@@ -313,12 +313,12 @@ Create feature-level tasks:
 # Initialize the main FastMCP server with fixed configuration
 try:
     logger.info("🏗️ MCP SERVER INITIALIZATION:")
-    logger.info("   Server Name: archon-mcp-server")
+    logger.info("   Server Name: 10x-mcp-server")
     logger.info("   Description: MCP server using HTTP calls")
 
     mcp = FastMCP(
-        "archon-mcp-server",
-        description="MCP server for Archon - uses HTTP calls to other services",
+        "10x-mcp-server",
+        description="MCP server for 10x PM - uses HTTP calls to other services",
         instructions=MCP_INSTRUCTIONS,
         lifespan=lifespan,
         host=server_host,
@@ -550,9 +550,9 @@ def main():
     """Main entry point for the MCP server."""
     try:
         # Initialize Logfire first
-        setup_logfire(service_name="archon-mcp-server")
+        setup_logfire(service_name="10x-mcp-server")
 
-        logger.info("🚀 Starting Archon MCP Server")
+        logger.info("🚀 Starting 10x MCP Server")
         logger.info("   Mode: Streamable HTTP")
         logger.info(f"   URL: http://{server_host}:{server_port}/mcp")
 

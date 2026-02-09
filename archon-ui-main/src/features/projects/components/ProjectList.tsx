@@ -8,7 +8,7 @@ import { ProjectCard } from "./ProjectCard";
 interface ProjectListProps {
   projects: Project[];
   selectedProject: Project | null;
-  taskCounts: Record<string, { todo: number; doing: number; review: number; done: number }>;
+  taskCounts: Record<string, { backlog: number; todo: number; doing: number; review: number; done: number }>;
   isLoading: boolean;
   error: Error | null;
   onProjectSelect: (project: Project) => void;
@@ -105,7 +105,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
               <ProjectCard
                 project={project}
                 isSelected={selectedProject?.id === project.id}
-                taskCounts={taskCounts[project.id] || { todo: 0, doing: 0, review: 0, done: 0 }}
+                taskCounts={taskCounts[project.id] || { backlog: 0, todo: 0, doing: 0, review: 0, done: 0 }}
                 onSelect={onProjectSelect}
                 onPin={onPinProject}
                 onDelete={onDeleteProject}

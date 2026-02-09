@@ -24,7 +24,7 @@ interface EditableTableCellProps {
 }
 
 // Status options for the status select
-const STATUS_OPTIONS = ["todo", "doing", "review", "done"] as const;
+const STATUS_OPTIONS = ["backlog", "todo", "doing", "review", "done"] as const;
 
 // Convert common assignees to ComboBox options
 const ASSIGNEE_OPTIONS: ComboBoxOption[] = COMMON_ASSIGNEES.map((name) => ({

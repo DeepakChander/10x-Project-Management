@@ -238,6 +238,7 @@ export const TableView = ({
   // Group tasks by status for better organization
   const groupedTasks = React.useMemo(() => {
     const groups: Record<Task["status"], Task[]> = {
+      backlog: [],
       todo: [],
       doing: [],
       review: [],
@@ -256,7 +257,7 @@ export const TableView = ({
     return groups;
   }, [tasks]);
 
-  const statusOrder: Task["status"][] = ["todo", "doing", "review", "done"];
+  const statusOrder: Task["status"][] = ["backlog", "todo", "doing", "review", "done"];
 
   return (
     <div className="overflow-x-auto">
@@ -285,6 +286,7 @@ export const TableView = ({
                       <span
                         className={cn(
                           "text-xs font-semibold uppercase tracking-wider",
+                          status === "backlog" && "text-slate-500",
                           status === "todo" && "text-gray-600",
                           status === "doing" && "text-[#C0745F]",
                           status === "review" && "text-[#C0745F]",

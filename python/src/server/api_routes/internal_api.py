@@ -22,8 +22,8 @@ router = APIRouter(prefix="/internal", tags=["internal"])
 ALLOWED_INTERNAL_IPS = [
     "127.0.0.1",  # Localhost
     "172.18.0.0/16",  # Docker network range
-    "archon-agents",  # Docker service name
-    "archon-mcp",  # Docker service name
+    "agents",  # Docker service name
+    "mcp",  # Docker service name
 ]
 
 
@@ -98,7 +98,7 @@ async def get_agent_credentials(request: Request) -> dict[str, Any]:
                 "AGENT_MAX_RETRIES", default="3"
             ),
             # MCP endpoint
-            "MCP_SERVICE_URL": f"http://archon-mcp:{os.getenv('ARCHON_MCP_PORT')}",
+            "MCP_SERVICE_URL": f"http://mcp:{os.getenv('ARCHON_MCP_PORT')}",
             # Additional settings
             "LOG_LEVEL": await credential_service.get_credential("LOG_LEVEL", default="INFO"),
         }

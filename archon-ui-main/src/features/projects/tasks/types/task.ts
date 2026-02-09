@@ -9,7 +9,7 @@ import type { TaskPriority } from "./priority";
 export type { TaskPriority };
 
 // Database status enum - using database values directly
-export type DatabaseTaskStatus = "todo" | "doing" | "review" | "done";
+export type DatabaseTaskStatus = "backlog" | "todo" | "doing" | "review" | "done";
 
 // Assignee type - flexible string to support any agent name
 export type Assignee = string;
@@ -20,6 +20,7 @@ export type CommonAssignee = (typeof COMMON_ASSIGNEES)[number];
 
 // Task counts for project overview
 export interface TaskCounts {
+  backlog: number;
   todo: number;
   doing: number;
   review: number;
@@ -58,6 +59,14 @@ export interface Task {
   created_at: string;
   updated_at: string;
 
+  // Lifecycle fields
+  reviewer_id?: string;
+  story_points?: number;
+  due_date?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_by?: string;
+
   // Soft delete fields
   archived?: boolean;
   archived_at?: string;
@@ -83,6 +92,10 @@ export interface CreateTaskRequest {
   priority?: TaskPriority;
   sources?: TaskSource[];
   code_examples?: TaskCodeExample[];
+  reviewer_id?: string;
+  story_points?: number;
+  due_date?: string;
+  created_by?: string;
 }
 
 export interface UpdateTaskRequest {
@@ -96,4 +109,7 @@ export interface UpdateTaskRequest {
   priority?: TaskPriority;
   sources?: TaskSource[];
   code_examples?: TaskCodeExample[];
+  reviewer_id?: string;
+  story_points?: number;
+  due_date?: string;
 }

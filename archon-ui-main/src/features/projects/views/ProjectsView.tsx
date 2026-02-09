@@ -259,7 +259,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                     key={project.id}
                     project={project}
                     isSelected={selectedProject?.id === project.id}
-                    taskCounts={taskCounts[project.id] || { todo: 0, doing: 0, review: 0, done: 0 }}
+                    taskCounts={taskCounts[project.id] || { backlog: 0, todo: 0, doing: 0, review: 0, done: 0 }}
                     onSelect={() => handleProjectSelect(project)}
                   />
                 ))}
@@ -343,6 +343,7 @@ interface SidebarProjectCardProps {
   project: Project;
   isSelected: boolean;
   taskCounts: {
+    backlog: number;
     todo: number;
     doing: number;
     review: number;

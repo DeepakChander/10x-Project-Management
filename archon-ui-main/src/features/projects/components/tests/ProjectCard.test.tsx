@@ -16,6 +16,7 @@ describe("ProjectCard", () => {
   };
 
   const mockTaskCounts = {
+    backlog: 1,
     todo: 5,
     doing: 3,
     review: 2,
@@ -109,6 +110,7 @@ describe("ProjectCard", () => {
 
   it("should show zero task counts correctly", () => {
     const zeroTaskCounts = {
+      backlog: 0,
       todo: 0,
       doing: 0,
       review: 0,

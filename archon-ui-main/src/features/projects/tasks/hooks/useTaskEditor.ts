@@ -24,7 +24,7 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
   // Get default order for new tasks based on status
   const getDefaultTaskOrder = useCallback((status: Task["status"]) => {
     // Simple priority mapping: todo=50, doing=25, review=75, done=100
-    const statusOrderMap = { todo: 50, doing: 25, review: 75, done: 100 };
+    const statusOrderMap = { backlog: 0, todo: 50, doing: 25, review: 75, done: 100 };
     return statusOrderMap[status] || 50;
   }, []);
 
@@ -50,11 +50,11 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
         project_id: projectId,
         title: localTask.title || "",
         description: localTask.description || "",
-        status: (localTask.status as Task["status"]) || "todo",
+        status: (localTask.status as Task["status"]) || "backlog",
         assignee: (localTask.assignee as Assignee) || "User",
         priority: localTask.priority || "medium",
         feature: localTask.feature || "",
-        task_order: localTask.task_order || getDefaultTaskOrder((localTask.status as Task["status"]) || "todo"),
+        task_order: localTask.task_order || getDefaultTaskOrder((localTask.status as Task["status"]) || "backlog"),
       };
     },
     [projectId, getDefaultTaskOrder],

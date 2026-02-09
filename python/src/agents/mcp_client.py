@@ -39,7 +39,7 @@ class MCPClient:
 
                 mcp_port = os.getenv("ARCHON_MCP_PORT", "8051")
                 if os.getenv("DOCKER_CONTAINER"):
-                    self.mcp_url = f"http://archon-mcp:{mcp_port}"
+                    self.mcp_url = f"http://mcp:{mcp_port}"
                 else:
                     self.mcp_url = f"http://localhost:{mcp_port}"
 

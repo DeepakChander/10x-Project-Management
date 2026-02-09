@@ -11,6 +11,7 @@ interface ProjectCardProps {
   project: Project;
   isSelected: boolean;
   taskCounts: {
+    backlog: number;
     todo: number;
     doing: number;
     review: number;

@@ -858,7 +858,7 @@ CREATE POLICY "Allow public read access to archon_page_metadata"
 -- Task status enumeration
 -- Create task_status enum if it doesn't exist
 DO $$ BEGIN
-    CREATE TYPE task_status AS ENUM ('todo','doing','review','done');
+    CREATE TYPE task_status AS ENUM ('backlog','todo','doing','review','done');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -894,13 +894,19 @@ CREATE TABLE IF NOT EXISTS archon_tasks (
   parent_task_id UUID REFERENCES archon_tasks(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
-  status task_status DEFAULT 'todo',
+  status task_status DEFAULT 'backlog',
   assignee TEXT DEFAULT 'User' CHECK (assignee IS NOT NULL AND assignee != ''),
   task_order INTEGER DEFAULT 0,
   priority task_priority DEFAULT 'medium' NOT NULL,
   feature TEXT,
   sources JSONB DEFAULT '[]'::jsonb,
   code_examples JSONB DEFAULT '[]'::jsonb,
+  reviewer_id TEXT,
+  story_points INTEGER,
+  due_date TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_by TEXT DEFAULT 'User',
   archived BOOLEAN DEFAULT false,
   archived_at TIMESTAMPTZ NULL,
   archived_by TEXT NULL,
@@ -948,6 +954,9 @@ CREATE INDEX IF NOT EXISTS idx_archon_tasks_status ON archon_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_archon_tasks_assignee ON archon_tasks(assignee);
 CREATE INDEX IF NOT EXISTS idx_archon_tasks_order ON archon_tasks(task_order);
 CREATE INDEX IF NOT EXISTS idx_archon_tasks_priority ON archon_tasks(priority);
+CREATE INDEX IF NOT EXISTS idx_archon_tasks_due_date ON archon_tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_archon_tasks_story_points ON archon_tasks(story_points);
+CREATE INDEX IF NOT EXISTS idx_archon_tasks_reviewer_id ON archon_tasks(reviewer_id);
 CREATE INDEX IF NOT EXISTS idx_archon_tasks_archived ON archon_tasks(archived);
 CREATE INDEX IF NOT EXISTS idx_archon_tasks_archived_at ON archon_tasks(archived_at);
 CREATE INDEX IF NOT EXISTS idx_archon_project_sources_project_id ON archon_project_sources(project_id);
@@ -1011,6 +1020,12 @@ $$ LANGUAGE plpgsql;
 -- Add comments to document the soft delete fields
 COMMENT ON COLUMN archon_tasks.assignee IS 'The agent or user assigned to this task. Can be any valid agent name or "User"';
 COMMENT ON COLUMN archon_tasks.priority IS 'Task priority level independent of visual ordering - used for semantic importance (low, medium, high, critical)';
+COMMENT ON COLUMN archon_tasks.reviewer_id IS 'The user or agent assigned to review this task';
+COMMENT ON COLUMN archon_tasks.story_points IS 'Estimated effort in story points (1-13 Fibonacci scale)';
+COMMENT ON COLUMN archon_tasks.due_date IS 'Target completion date for this task';
+COMMENT ON COLUMN archon_tasks.started_at IS 'Timestamp when task was moved to doing status';
+COMMENT ON COLUMN archon_tasks.completed_at IS 'Timestamp when task was moved to done status';
+COMMENT ON COLUMN archon_tasks.created_by IS 'The user or agent that created this task';
 COMMENT ON COLUMN archon_tasks.archived IS 'Soft delete flag - TRUE if task is archived/deleted';
 COMMENT ON COLUMN archon_tasks.archived_at IS 'Timestamp when task was archived';
 COMMENT ON COLUMN archon_tasks.archived_by IS 'User/system that archived the task';
@@ -1062,7 +1077,8 @@ VALUES
   ('0.1.0', '008_add_migration_tracking'),
   ('0.1.0', '009_add_cascade_delete_constraints'),
   ('0.1.0', '010_add_provider_placeholders'),
-  ('0.1.0', '011_add_page_metadata_table')
+  ('0.1.0', '011_add_page_metadata_table'),
+  ('0.1.0', '012_enhanced_task_lifecycle')
 ON CONFLICT (version, migration_name) DO NOTHING;
 
 -- Enable Row Level Security on migrations table

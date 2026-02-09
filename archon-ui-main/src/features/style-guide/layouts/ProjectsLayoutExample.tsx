@@ -31,25 +31,25 @@ const MOCK_PROJECTS = [
     id: "1",
     title: "Design System Refactor",
     pinned: true,
-    taskCounts: { todo: 5, doing: 2, review: 1, done: 12 },
+    taskCounts: { backlog: 3, todo: 5, doing: 2, review: 1, done: 12 },
   },
   {
     id: "2",
     title: "API Integration Layer",
     pinned: false,
-    taskCounts: { todo: 3, doing: 1, review: 0, done: 8 },
+    taskCounts: { backlog: 1, todo: 3, doing: 1, review: 0, done: 8 },
   },
   {
     id: "3",
     title: "Mobile App Development",
     pinned: false,
-    taskCounts: { todo: 8, doing: 0, review: 0, done: 0 },
+    taskCounts: { backlog: 4, todo: 8, doing: 0, review: 0, done: 0 },
   },
   {
     id: "4",
     title: "Documentation Updates",
     pinned: false,
-    taskCounts: { todo: 2, doing: 1, review: 2, done: 15 },
+    taskCounts: { backlog: 0, todo: 2, doing: 1, review: 2, done: 15 },
   },
 ];
 
@@ -645,6 +645,7 @@ const ProjectCardExample = ({
 // Kanban Board - NO BACKGROUNDS, wrapped in DndProvider
 const KanbanBoardView = () => {
   const columns = [
+    { status: "backlog" as const, title: "Backlog", color: "text-slate-500", glow: "bg-slate-500" },
     { status: "todo" as const, title: "Todo", color: "text-pink-500", glow: "bg-pink-500" },
     { status: "doing" as const, title: "Doing", color: "text-blue-500", glow: "bg-blue-500" },
     { status: "review" as const, title: "Review", color: "text-purple-500", glow: "bg-purple-500" },
@@ -657,7 +658,7 @@ const KanbanBoardView = () => {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 min-h-[500px]">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2 min-h-[500px]">
         {columns.map(({ status, title, color, glow }) => (
           <div key={status} className="flex flex-col">
             {/* Column Header - transparent */}

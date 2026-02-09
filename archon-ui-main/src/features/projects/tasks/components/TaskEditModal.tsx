@@ -56,7 +56,7 @@ export const TaskEditModal = memo(
         setLocalTask({
           title: "",
           description: "",
-          status: "todo",
+          status: "backlog",
           assignee: "User" as Assignee,
           feature: "",
           priority: "medium" as TaskPriority, // Direct priority field
@@ -120,7 +120,7 @@ export const TaskEditModal = memo(
               <FormField>
                 <Label>Status</Label>
                 <Select
-                  value={localTask?.status || "todo"}
+                  value={localTask?.status || "backlog"}
                   onValueChange={(value) =>
                     setLocalTask((prev) => (prev ? { ...prev, status: value as Task["status"] } : null))
                   }
@@ -129,6 +129,7 @@ export const TaskEditModal = memo(
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="backlog">Backlog</SelectItem>
                     <SelectItem value="todo">Todo</SelectItem>
                     <SelectItem value="doing">Doing</SelectItem>
                     <SelectItem value="review">Review</SelectItem>
@@ -182,6 +183,36 @@ export const TaskEditModal = memo(
                   isLoadingFeatures={isLoadingFeatures}
                   placeholder="Select or create feature..."
                   className="w-full"
+                />
+              </FormField>
+            </FormGrid>
+
+            <FormGrid columns={2}>
+              <FormField>
+                <Label>Story Points</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={13}
+                  value={localTask?.story_points ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number.parseInt(e.target.value, 10) : undefined;
+                    setLocalTask((prev) => (prev ? { ...prev, story_points: val } : null));
+                  }}
+                  placeholder="1-13"
+                />
+              </FormField>
+
+              <FormField>
+                <Label>Due Date</Label>
+                <Input
+                  type="datetime-local"
+                  value={localTask?.due_date ? localTask.due_date.slice(0, 16) : ""}
+                  onChange={(e) =>
+                    setLocalTask((prev) =>
+                      prev ? { ...prev, due_date: e.target.value ? new Date(e.target.value).toISOString() : undefined } : null,
+                    )
+                  }
                 />
               </FormField>
             </FormGrid>

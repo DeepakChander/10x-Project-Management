@@ -7,7 +7,7 @@ services:
     build:
       context: ./docs
       dockerfile: Dockerfile
-    container_name: Archon-Docs
+    container_name: 10x-docs
     ports:
       - "${ARCHON_DOCS_PORT:-3838}:80"
     networks:

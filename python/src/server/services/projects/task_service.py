@@ -21,7 +21,37 @@ logger = get_logger(__name__)
 class TaskService:
     """Service class for task operations"""
 
-    VALID_STATUSES = ["todo", "doing", "review", "done"]
+    VALID_STATUSES = ["backlog", "todo", "doing", "review", "done"]
+
+    VALID_TRANSITIONS = {
+        "backlog": ["todo"],
+        "todo": ["doing", "backlog"],
+        "doing": ["review", "todo"],
+        "review": ["done", "doing"],
+        "done": [],  # Use archive_task() instead
+    }
+
+    def validate_transition(self, current_status: str, new_status: str) -> tuple[bool, str]:
+        """Validate a status transition against the lifecycle rules.
+
+        Any status can transition to 'backlog' (reset).
+        Otherwise, transitions must follow the VALID_TRANSITIONS map.
+        """
+        if new_status == "backlog":
+            return True, ""
+
+        if current_status == new_status:
+            return True, ""
+
+        allowed = self.VALID_TRANSITIONS.get(current_status, [])
+        if new_status not in allowed:
+            allowed_str = ", ".join(allowed) if allowed else "none (use archive instead)"
+            return (
+                False,
+                f"Invalid transition from '{current_status}' to '{new_status}'. "
+                f"Allowed transitions from '{current_status}': {allowed_str}",
+            )
+        return True, ""
 
     def __init__(self, supabase_client=None):
         """Initialize with optional supabase client"""
@@ -63,6 +93,10 @@ class TaskService:
         feature: str | None = None,
         sources: list[dict[str, Any]] = None,
         code_examples: list[dict[str, Any]] = None,
+        reviewer_id: str | None = None,
+        story_points: int | None = None,
+        due_date: str | None = None,
+        created_by: str = "User",
     ) -> tuple[bool, dict[str, Any]]:
         """
         Create a new task under a project with automatic reordering.
@@ -88,7 +122,7 @@ class TaskService:
             if not is_valid:
                 return False, {"error": error_msg}
 
-            task_status = "todo"
+            task_status = "backlog"
 
             # REORDERING LOGIC: If inserting at a specific position, increment existing tasks
             if task_order > 0:
@@ -123,12 +157,19 @@ class TaskService:
                 "priority": priority,
                 "sources": sources or [],
                 "code_examples": code_examples or [],
+                "created_by": created_by,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
             }
 
             if feature:
                 task_data["feature"] = feature
+            if reviewer_id:
+                task_data["reviewer_id"] = reviewer_id
+            if story_points is not None:
+                task_data["story_points"] = story_points
+            if due_date:
+                task_data["due_date"] = due_date
 
             response = self.supabase_client.table("archon_tasks").insert(task_data).execute()
 
@@ -146,6 +187,10 @@ class TaskService:
                         "assignee": task["assignee"],
                         "task_order": task["task_order"],
                         "priority": task["priority"],
+                        "reviewer_id": task.get("reviewer_id"),
+                        "story_points": task.get("story_points"),
+                        "due_date": task.get("due_date"),
+                        "created_by": task.get("created_by", "User"),
                         "created_at": task["created_at"],
                     }
                 }
@@ -299,6 +344,12 @@ class TaskService:
                     "task_order": task.get("task_order", 0),
                     "priority": task.get("priority", "medium"),
                     "feature": task.get("feature"),
+                    "reviewer_id": task.get("reviewer_id"),
+                    "story_points": task.get("story_points"),
+                    "due_date": task.get("due_date"),
+                    "started_at": task.get("started_at"),
+                    "completed_at": task.get("completed_at"),
+                    "created_by": task.get("created_by", "User"),
                     "created_at": task["created_at"],
                     "updated_at": task["updated_at"],
                     "archived": task.get("archived", False),
@@ -382,6 +433,28 @@ class TaskService:
                 is_valid, error_msg = self.validate_status(update_fields["status"])
                 if not is_valid:
                     return False, {"error": error_msg}
+
+                # Fetch current task to validate transition
+                current_task_response = (
+                    self.supabase_client.table("archon_tasks")
+                    .select("status")
+                    .eq("id", task_id)
+                    .execute()
+                )
+                if current_task_response.data:
+                    current_status = current_task_response.data[0]["status"]
+                    is_valid, error_msg = self.validate_transition(current_status, update_fields["status"])
+                    if not is_valid:
+                        return False, {"error": error_msg}
+
+                    # Auto-set started_at when transitioning to "doing"
+                    if update_fields["status"] == "doing" and current_status != "doing":
+                        update_data["started_at"] = datetime.now().isoformat()
+
+                    # Auto-set completed_at when transitioning to "done"
+                    if update_fields["status"] == "done" and current_status != "done":
+                        update_data["completed_at"] = datetime.now().isoformat()
+
                 update_data["status"] = update_fields["status"]
 
             if "assignee" in update_fields:
@@ -401,6 +474,15 @@ class TaskService:
 
             if "feature" in update_fields:
                 update_data["feature"] = update_fields["feature"]
+
+            if "reviewer_id" in update_fields:
+                update_data["reviewer_id"] = update_fields["reviewer_id"]
+
+            if "story_points" in update_fields:
+                update_data["story_points"] = update_fields["story_points"]
+
+            if "due_date" in update_fields:
+                update_data["due_date"] = update_fields["due_date"]
 
             # Update task
             response = (
@@ -477,7 +559,7 @@ class TaskService:
         
         Returns:
             Tuple of (success, counts_dict) where counts_dict is:
-            {"project-id": {"todo": 5, "doing": 2, "review": 3, "done": 10}}
+            {"project-id": {"backlog": 1, "todo": 5, "doing": 2, "review": 3, "done": 10}}
         """
         try:
             logger.debug("Fetching task counts for all projects in batch")
@@ -507,6 +589,7 @@ class TaskService:
                 # Initialize project counts if not exists
                 if project_id not in counts_by_project:
                     counts_by_project[project_id] = {
+                        "backlog": 0,
                         "todo": 0,
                         "doing": 0,
                         "review": 0,
@@ -514,7 +597,7 @@ class TaskService:
                     }
 
                 # Count all statuses separately
-                if status in ["todo", "doing", "review", "done"]:
+                if status in ["backlog", "todo", "doing", "review", "done"]:
                     counts_by_project[project_id][status] += 1
 
             logger.debug(f"Task counts fetched for {len(counts_by_project)} projects")

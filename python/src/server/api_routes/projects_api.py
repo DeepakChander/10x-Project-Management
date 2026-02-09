@@ -68,11 +68,15 @@ class CreateTaskRequest(BaseModel):
     project_id: str
     title: str
     description: str | None = None
-    status: str | None = "todo"
+    status: str | None = "backlog"
     assignee: str | None = "User"
     task_order: int | None = 0
     priority: str | None = "medium"
     feature: str | None = None
+    reviewer_id: str | None = None
+    story_points: int | None = None
+    due_date: str | None = None
+    created_by: str | None = "User"
 
 
 @router.get("/projects")
@@ -609,6 +613,9 @@ async def list_project_tasks(
                     "priority": task.get("priority") or "",
                     "feature": task.get("feature") or "",
                     "description": task.get("description") or "",
+                    "reviewer_id": task.get("reviewer_id") or "",
+                    "story_points": task.get("story_points"),
+                    "due_date": task.get("due_date") or "",
                     "updated_at": (
                         parsed_updated.isoformat()
                         if parsed_updated is not None
@@ -668,6 +675,10 @@ async def create_task(request: CreateTaskRequest):
             task_order=request.task_order or 0,
             priority=request.priority or "medium",
             feature=request.feature,
+            reviewer_id=request.reviewer_id,
+            story_points=request.story_points,
+            due_date=request.due_date,
+            created_by=request.created_by or "User",
         )
 
         if not success:
@@ -806,6 +817,9 @@ class UpdateTaskRequest(BaseModel):
     task_order: int | None = None
     priority: str | None = None
     feature: str | None = None
+    reviewer_id: str | None = None
+    story_points: int | None = None
+    due_date: str | None = None
 
 
 class CreateDocumentRequest(BaseModel):
@@ -856,6 +870,12 @@ async def update_task(task_id: str, request: UpdateTaskRequest):
             update_fields["priority"] = request.priority
         if request.feature is not None:
             update_fields["feature"] = request.feature
+        if request.reviewer_id is not None:
+            update_fields["reviewer_id"] = request.reviewer_id
+        if request.story_points is not None:
+            update_fields["story_points"] = request.story_points
+        if request.due_date is not None:
+            update_fields["due_date"] = request.due_date
 
         # Use TaskService to update the task
         task_service = TaskService()
