@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Environment
+.env
+.env.local
+
+# Build
+dist/
+build/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+.zed
+.serena
+
+# Cache
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project local
+.claude/settings.local.json
+PRPs/local
+PRPs/completed/
+PRPs/stories/
+PRPs/reviews/
+/logs/
+tmp/
+temp/
+UAT/
+
+# Temp files
+doing_tasks.json
+todo_tasks.json
+UsershpDesktoparchondoing_tasks.json
+openapi_temp.json
+sources_temp.json
+release-notes-*.md
