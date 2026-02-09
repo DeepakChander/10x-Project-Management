@@ -2,7 +2,7 @@
 
 ## Overview
 
-Archon uses **TanStack Query v5** for all data fetching, caching, and synchronization. This replaces the former custom polling layer with a query‑centric design that handles caching, deduplication, and smart refetching (including visibility‑aware polling) automatically.
+10x PM uses **TanStack Query v5** for all data fetching, caching, and synchronization. This replaces the former custom polling layer with a query‑centric design that handles caching, deduplication, and smart refetching (including visibility‑aware polling) automatically.
 
 ## Core Components
 

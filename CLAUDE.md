@@ -158,7 +158,7 @@ When a process should continue despite failures, it must **skip the failed item 
 - Fix forward
 - Focus on user experience and feature completeness
 - When updating code, don't reference what is changing (avoid keywords like SIMPLIFIED, ENHANCED, LEGACY, CHANGED, REMOVED), instead focus on comments that document just the functionality of the code
-- When commenting on code in the codebase, only comment on the functionality and reasoning behind the code. Refrain from speaking to Archon being in "beta" or referencing anything else that comes from these global rules.
+- When commenting on code in the codebase, only comment on the functionality and reasoning behind the code. Refrain from speaking to 10x PM being in "beta" or referencing anything else that comes from these global rules.
 
 ## Development Commands
 
@@ -203,9 +203,9 @@ uv run mypy src/         # Type check
 # Docker operations
 docker compose up --build -d       # Start all services
 docker compose --profile backend up -d  # Backend only (for hybrid dev)
-docker compose logs -f archon-server   # View server logs
-docker compose logs -f archon-mcp      # View MCP server logs
-docker compose restart archon-server   # Restart after code changes
+docker compose logs -f 10x-server      # View server logs
+docker compose logs -f 10x-mcp         # View MCP server logs
+docker compose restart 10x-server      # Restart after code changes
 docker compose down      # Stop all services
 docker compose down -v   # Stop and remove volumes
 ```
@@ -272,7 +272,7 @@ Key tables in Supabase:
   - Contains features array, documents, and metadata
 - `tasks` - Task tracking linked to projects
   - Status: todo, doing, review, done
-  - Assignee: User, Archon, AI IDE Agent
+  - Assignee: User, 10x, AI IDE Agent
 - `code_examples` - Extracted code snippets
   - Language, summary, and relevance metadata
 
@@ -365,31 +365,31 @@ When connected to Claude/Cursor/Windsurf, the following tools are available:
 
 ### Knowledge Base Tools
 
-- `archon:rag_search_knowledge_base` - Search knowledge base for relevant content
-- `archon:rag_search_code_examples` - Find code snippets in the knowledge base
-- `archon:rag_get_available_sources` - List available knowledge sources
-- `archon:rag_list_pages_for_source` - List all pages for a given source (browse documentation structure)
-- `archon:rag_read_full_page` - Retrieve full page content by page_id or URL
+- `10x:rag_search_knowledge_base` - Search knowledge base for relevant content
+- `10x:rag_search_code_examples` - Find code snippets in the knowledge base
+- `10x:rag_get_available_sources` - List available knowledge sources
+- `10x:rag_list_pages_for_source` - List all pages for a given source (browse documentation structure)
+- `10x:rag_read_full_page` - Retrieve full page content by page_id or URL
 
 ### Project Management
 
-- `archon:find_projects` - Find all projects, search, or get specific project (by project_id)
-- `archon:manage_project` - Manage projects with actions: "create", "update", "delete"
+- `10x:find_projects` - Find all projects, search, or get specific project (by project_id)
+- `10x:manage_project` - Manage projects with actions: "create", "update", "delete"
 
 ### Task Management
 
-- `archon:find_tasks` - Find tasks with search, filters, or get specific task (by task_id)
-- `archon:manage_task` - Manage tasks with actions: "create", "update", "delete"
+- `10x:find_tasks` - Find tasks with search, filters, or get specific task (by task_id)
+- `10x:manage_task` - Manage tasks with actions: "create", "update", "delete"
 
 ### Document Management
 
-- `archon:find_documents` - Find documents, search, or get specific document (by document_id)
-- `archon:manage_document` - Manage documents with actions: "create", "update", "delete"
+- `10x:find_documents` - Find documents, search, or get specific document (by document_id)
+- `10x:manage_document` - Manage documents with actions: "create", "update", "delete"
 
 ### Version Control
 
-- `archon:find_versions` - Find version history or get specific version
-- `archon:manage_version` - Manage versions with actions: "create", "restore"
+- `10x:find_versions` - Find version history or get specific version
+- `10x:manage_version` - Manage versions with actions: "create", "restore"
 
 ## Important Notes
 

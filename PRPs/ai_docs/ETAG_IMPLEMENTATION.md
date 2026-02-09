@@ -2,7 +2,7 @@
 
 ## Overview
 
-Archon implements HTTP ETag caching to optimize bandwidth usage by reducing redundant data transfers. The implementation leverages browser-native HTTP caching combined with backend ETag generation for efficient cache validation.
+10x PM implements HTTP ETag caching to optimize bandwidth usage by reducing redundant data transfers. The implementation leverages browser-native HTTP caching combined with backend ETag generation for efficient cache validation.
 
 ## How It Works
 

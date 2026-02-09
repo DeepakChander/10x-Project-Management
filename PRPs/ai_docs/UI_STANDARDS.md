@@ -1,4 +1,4 @@
-# Archon UI Standards
+# 10x PM UI Standards
 
 **Audience**: AI agents performing automated UI audits and refactors
 **Purpose**: Single source of truth for UI patterns, violations, and automated detection
@@ -312,7 +312,7 @@ grep -rn "from \"./styles\"" [path]/primitives --include="*.tsx" --files-without
 
 ## 6. PRIMITIVES LIBRARY
 
-### Archon Components
+### 10x PM Components
 - **Card** - For all glassmorphism effects
 - **DataCard** - Cards with header/content/footer slots
 - **PillNavigation** - Tab navigation (NEVER create custom)
@@ -706,7 +706,7 @@ Every color object MUST have:
 
 ### Common Patterns
 
-**Horizontal Scroll (Archon Standard)**
+**Horizontal Scroll (10x PM Standard)**
 ```tsx
 <div className="w-full">
   <div className="overflow-x-auto scrollbar-hide">

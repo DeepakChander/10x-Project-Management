@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the actual naming conventions used throughout Archon's codebase based on current implementation patterns. All examples reference real files where these patterns are implemented.
+This document describes the actual naming conventions used throughout 10x PM's codebase based on current implementation patterns. All examples reference real files where these patterns are implemented.
 
 ## Backend API Endpoints
 

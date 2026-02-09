@@ -1,8 +1,8 @@
-# Archon Architecture
+# 10x PM Architecture
 
 ## Overview
 
-Archon is a knowledge management system with AI capabilities, built as a monolithic application with vertical slice organization. The frontend uses React with TanStack Query, while the backend runs FastAPI with multiple service components.
+10x PM is a knowledge management system with AI capabilities, built as a monolithic application with vertical slice organization. The frontend uses React with TanStack Query, while the backend runs FastAPI with multiple service components.
 
 ## Tech Stack
 
