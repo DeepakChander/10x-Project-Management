@@ -479,6 +479,23 @@ def register_modules():
         logger.error(f"✗ Failed to register task tools: {e}")
         logger.error(traceback.format_exc())
 
+    # Task Dependency Tools
+    try:
+        from src.mcp_server.features.tasks import register_dependency_tools
+
+        register_dependency_tools(mcp)
+        modules_registered += 1
+        logger.info("✓ Task dependency tools registered")
+    except ImportError as e:
+        logger.warning(f"⚠ Task dependency tools module not available (optional): {e}")
+    except (SyntaxError, NameError, AttributeError) as e:
+        logger.error(f"✗ Code error in task dependency tools - MUST FIX: {e}")
+        logger.error(traceback.format_exc())
+        raise
+    except Exception as e:
+        logger.error(f"✗ Failed to register task dependency tools: {e}")
+        logger.error(traceback.format_exc())
+
     # Document Management Tools
     try:
         from src.mcp_server.features.documents import register_document_tools

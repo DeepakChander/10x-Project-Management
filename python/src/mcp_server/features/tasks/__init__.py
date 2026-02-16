@@ -1,14 +1,10 @@
 """
-Task management tools for Archon MCP Server.
+Task management tools for MCP Server.
 
-This module provides separate tools for each task operation:
-- create_task: Create a new task
-- list_tasks: List tasks with filtering
-- get_task: Get task details
-- update_task: Update task properties
-- delete_task: Delete a task
+Provides tools for task CRUD operations and dependency management.
 """
 
+from .dependency_tools import register_dependency_tools
 from .task_tools import register_task_tools
 
-__all__ = ["register_task_tools"]
+__all__ = ["register_task_tools", "register_dependency_tools"]

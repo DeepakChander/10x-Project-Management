@@ -35,6 +35,14 @@ from ..services.projects import (
 from ..services.projects.document_service import DocumentService
 from ..services.projects.versioning_service import VersioningService
 
+# Permission middleware imports
+from fastapi import Depends
+from ..middleware.permission_middleware import (
+    require_permission,
+    require_task_permission,
+    require_human_only,
+)
+
 # Using HTTP polling for real-time updates
 
 router = APIRouter(prefix="/api", tags=["projects"])
@@ -558,9 +566,13 @@ async def list_project_tasks(
     request: Request,
     response: Response,
     include_archived: bool = False,
-    exclude_large_fields: bool = False
+    exclude_large_fields: bool = False,
+    perm: dict = Depends(require_permission("task", "read"))
 ):
-    """List all tasks for a specific project with ETag support for efficient polling."""
+    """List all tasks for a specific project with ETag support for efficient polling.
+
+    Requires: task:read permission
+    """
     try:
         # Get If-None-Match header for ETag comparison
         if_none_match = request.headers.get("If-None-Match")
@@ -662,9 +674,39 @@ async def list_project_tasks(
 
 
 @router.post("/tasks")
-async def create_task(request: CreateTaskRequest):
-    """Create a new task with automatic reordering."""
+async def create_task(
+    request: CreateTaskRequest,
+    x_user_id: str = Header(None, alias="X-User-Id")
+):
+    """Create a new task with automatic reordering.
+
+    Requires: task:create permission
+    """
     try:
+        # Manual permission check (project_id is in request body)
+        if x_user_id:
+            from ..services.permission_service import PermissionService
+
+            permission_service = PermissionService()
+            perm_result = permission_service.check_permission(
+                user_id=x_user_id,
+                project_id=request.project_id,
+                resource="task",
+                action="create",
+            )
+
+            if not perm_result["allowed"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "Permission denied",
+                        "resource": "task",
+                        "action": "create",
+                        "reason": perm_result["reason"],
+                        "effective_role": perm_result.get("effective_role"),
+                    },
+                )
+
         # Use TaskService to create the task
         task_service = TaskService()
         success, result = await task_service.create_task(
@@ -708,9 +750,37 @@ async def list_tasks(
     per_page: int = 10,
     exclude_large_fields: bool = False,
     q: str | None = None,  # Search query parameter
+    x_user_id: str = Header(None, alias="X-User-Id")
 ):
-    """List tasks with optional filters including status, project, and keyword search."""
+    """List tasks with optional filters including status, project, and keyword search.
+
+    Requires: task:read permission (if project_id is provided)
+    """
     try:
+        # Optional permission check when project_id is provided
+        if project_id and x_user_id:
+            from ..services.permission_service import PermissionService
+
+            permission_service = PermissionService()
+            perm_result = permission_service.check_permission(
+                user_id=x_user_id,
+                project_id=project_id,
+                resource="task",
+                action="read",
+            )
+
+            if not perm_result["allowed"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "Permission denied",
+                        "resource": "task",
+                        "action": "read",
+                        "reason": perm_result["reason"],
+                        "effective_role": perm_result.get("effective_role"),
+                    },
+                )
+
         logfire.info(
             f"Listing tasks | status={status} | project_id={project_id} | include_closed={include_closed} | page={page} | per_page={per_page} | q={q}"
         )
@@ -781,8 +851,14 @@ async def list_tasks(
 
 
 @router.get("/tasks/{task_id}")
-async def get_task(task_id: str):
-    """Get a specific task by ID."""
+async def get_task(
+    task_id: str,
+    perm: dict = Depends(require_task_permission("read"))
+):
+    """Get a specific task by ID.
+
+    Requires: task:read permission
+    """
     try:
         # Use TaskService to get the task
         task_service = TaskService()
@@ -851,8 +927,15 @@ class RestoreVersionRequest(BaseModel):
 
 
 @router.put("/tasks/{task_id}")
-async def update_task(task_id: str, request: UpdateTaskRequest):
-    """Update a task."""
+async def update_task(
+    task_id: str,
+    request: UpdateTaskRequest,
+    perm: dict = Depends(require_task_permission("update"))
+):
+    """Update a task.
+
+    Requires: task:update permission
+    """
     try:
         # Build update fields dictionary
         update_fields = {}
@@ -903,8 +986,14 @@ async def update_task(task_id: str, request: UpdateTaskRequest):
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str):
-    """Archive a task (soft delete)."""
+async def delete_task(
+    task_id: str,
+    perm: dict = Depends(require_task_permission("delete"))
+):
+    """Archive a task (soft delete).
+
+    Requires: task:delete permission
+    """
     try:
         # Use TaskService to archive the task
         task_service = TaskService()
@@ -933,8 +1022,15 @@ async def delete_task(task_id: str):
 
 
 @router.put("/mcp/tasks/{task_id}/status")
-async def mcp_update_task_status(task_id: str, status: str):
-    """Update task status via MCP tools."""
+async def mcp_update_task_status(
+    task_id: str,
+    status: str,
+    perm: dict = Depends(require_task_permission("update"))
+):
+    """Update task status via MCP tools.
+
+    Requires: task:update permission
+    """
     try:
         logfire.info(f"MCP task status update | task_id={task_id} | status={status}")
 
@@ -965,6 +1061,114 @@ async def mcp_update_task_status(task_id: str, status: str):
         logfire.error(
             f"Failed to update task status | error={str(e)} | task_id={task_id}"
         )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== TASK DEPENDENCY ENDPOINTS ====================
+
+
+class CreateDependencyRequest(BaseModel):
+    depends_on_id: str
+
+
+@router.get("/projects/{project_id}/dependencies")
+async def get_project_dependencies(project_id: str):
+    """Get all task dependencies for a project."""
+    try:
+        from ..services.projects.task_dependency_service import TaskDependencyService
+        dep_service = TaskDependencyService()
+        success, result = await dep_service.get_dependencies_for_project(project_id)
+
+        if not success:
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+
+        return result["dependencies"]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get project dependencies: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tasks/{task_id}/dependencies")
+async def get_task_dependencies(
+    task_id: str,
+    perm: dict = Depends(require_task_permission("read"))
+):
+    """Get dependencies for a specific task (blocks and blocked_by).
+
+    Requires: task:read permission
+    """
+    try:
+        from ..services.projects.task_dependency_service import TaskDependencyService
+        dep_service = TaskDependencyService()
+        success, result = await dep_service.get_dependencies_for_task(task_id)
+
+        if not success:
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get task dependencies: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/tasks/{task_id}/dependencies")
+async def create_task_dependency(
+    task_id: str,
+    request: CreateDependencyRequest,
+    perm: dict = Depends(require_task_permission("update"))
+):
+    """Create a blocking dependency: task_id is blocked by depends_on_id.
+
+    Requires: task:update permission
+    """
+    try:
+        from ..services.projects.task_dependency_service import TaskDependencyService
+        dep_service = TaskDependencyService()
+        success, result = await dep_service.add_dependency(task_id, request.depends_on_id)
+
+        if not success:
+            error_msg = result.get("error", "Unknown error")
+            if "not found" in error_msg.lower():
+                raise HTTPException(status_code=404, detail=error_msg)
+            elif "circular" in error_msg.lower() or "already exists" in error_msg.lower():
+                raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create dependency: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/dependencies/{dependency_id}")
+async def delete_dependency(dependency_id: str):
+    """Remove a task dependency."""
+    try:
+        from ..services.projects.task_dependency_service import TaskDependencyService
+        dep_service = TaskDependencyService()
+        success, result = await dep_service.remove_dependency(dependency_id)
+
+        if not success:
+            error_msg = result.get("error", "Unknown error")
+            if "not found" in error_msg.lower():
+                raise HTTPException(status_code=404, detail=error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete dependency: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,0 +1,140 @@
+/**
+ * AI Service
+ *
+ * API client for AI-powered features
+ */
+
+import { callAPIWithETag } from "../../shared/api/apiClient";
+
+export interface TaskEstimation {
+  story_points: number;
+  duration_hours: number;
+  confidence: number;
+  reasoning: string;
+}
+
+export interface SprintPlan {
+  recommended_tasks: string[];
+  total_story_points: number;
+  capacity_utilization: number;
+  reasoning: string;
+  warnings: string[];
+}
+
+export interface AISuggestion {
+  id: string;
+  project_id?: string;
+  task_id?: string;
+  sprint_id?: string;
+  type: AISuggestionType;
+  title: string;
+  description: string;
+  confidence: number;
+  suggestion_data: Record<string, any>;
+  accepted: boolean | null;
+  accepted_at?: string;
+  accepted_by?: string;
+  model_used?: string;
+  created_at: string;
+}
+
+export type AISuggestionType =
+  | "task_estimation"
+  | "sprint_planning"
+  | "priority_suggestion"
+  | "dependency_detection"
+  | "capacity_warning";
+
+export const aiService = {
+  /**
+   * Get AI estimation for a task
+   */
+  async estimateTask(taskId: string, projectId: string): Promise<TaskEstimation> {
+    try {
+      const response = await callAPIWithETag<{ task_id: string; estimation: TaskEstimation }>(
+        `/api/ai/tasks/${taskId}/estimate?project_id=${projectId}`,
+        { method: "POST" }
+      );
+      return response.estimation;
+    } catch (error) {
+      console.error(`Failed to estimate task ${taskId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get AI sprint planning recommendations
+   */
+  async planSprint(projectId: string, capacityHours: number): Promise<SprintPlan> {
+    try {
+      const response = await callAPIWithETag<{ project_id: string; plan: SprintPlan }>(
+        `/api/ai/projects/${projectId}/plan-sprint`,
+        {
+          method: "POST",
+          body: JSON.stringify({ sprint_capacity_hours: capacityHours }),
+        }
+      );
+      return response.plan;
+    } catch (error) {
+      console.error(`Failed to plan sprint for project ${projectId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Detect dependencies for a task
+   */
+  async detectDependencies(
+    taskId: string,
+    projectId: string
+  ): Promise<Array<{ depends_on_task_id: string; depends_on_title: string; confidence: number; reasoning: string }>> {
+    try {
+      const response = await callAPIWithETag<{ task_id: string; dependencies: any[] }>(
+        `/api/ai/tasks/${taskId}/detect-dependencies?project_id=${projectId}`,
+        { method: "POST" }
+      );
+      return response.dependencies;
+    } catch (error) {
+      console.error(`Failed to detect dependencies for task ${taskId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get AI suggestions
+   */
+  async getSuggestions(params?: {
+    project_id?: string;
+    task_id?: string;
+    pending_only?: boolean;
+  }): Promise<AISuggestion[]> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.project_id) queryParams.append("project_id", params.project_id);
+      if (params?.task_id) queryParams.append("task_id", params.task_id);
+      if (params?.pending_only !== undefined)
+        queryParams.append("pending_only", String(params.pending_only));
+
+      const url = `/api/ai/suggestions${queryParams.toString() ? `?${queryParams}` : ""}`;
+      const suggestions = await callAPIWithETag<AISuggestion[]>(url);
+      return suggestions;
+    } catch (error) {
+      console.error("Failed to get AI suggestions:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Accept an AI suggestion
+   */
+  async acceptSuggestion(suggestionId: string): Promise<void> {
+    try {
+      await callAPIWithETag(`/api/ai/suggestions/${suggestionId}/accept`, {
+        method: "PUT",
+      });
+    } catch (error) {
+      console.error(`Failed to accept suggestion ${suggestionId}:`, error);
+      throw error;
+    }
+  },
+};

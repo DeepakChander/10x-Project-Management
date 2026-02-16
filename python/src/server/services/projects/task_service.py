@@ -18,6 +18,21 @@ logger = get_logger(__name__)
 # Task updates are handled via polling - no broadcasting needed
 
 
+def _send_notification_safe(notification_func, *args, **kwargs):
+    """
+    Safely attempt to send a notification without failing the main operation.
+    Notifications are nice-to-have, not critical to task operations.
+    """
+    try:
+        from ..notification_service import NotificationService
+        service = NotificationService()
+        method = getattr(service, notification_func)
+        return method(*args, **kwargs)
+    except Exception as e:
+        logger.warning(f"Failed to send notification {notification_func}: {e}")
+        return None
+
+
 class TaskService:
     """Service class for task operations"""
 
@@ -176,6 +191,16 @@ class TaskService:
             if response.data:
                 task = response.data[0]
 
+                # Send notification if task is assigned to a specific user
+                if assignee and assignee != "User" and assignee != created_by:
+                    _send_notification_safe(
+                        "notify_task_assigned",
+                        task_id=task["id"],
+                        assignee_id=assignee,
+                        project_id=project_id,
+                        task_title=title,
+                        actor_id=created_by,
+                    )
 
                 return True, {
                     "task": {
@@ -231,7 +256,7 @@ class TaskService:
                 query = self.supabase_client.table("archon_tasks").select(
                     "id, project_id, parent_task_id, title, description, "
                     "status, assignee, task_order, priority, feature, archived, "
-                    "archived_at, archived_by, created_at, updated_at, "
+                    "archived_at, archived_by, created_at, updated_at, sprint_id, "
                     "sources, code_examples"  # Still fetch for counting, but will process differently
                 )
             else:
@@ -419,6 +444,19 @@ class TaskService:
             Tuple of (success, result_dict)
         """
         try:
+            # Fetch current task for comparison (for notification triggers)
+            old_task_response = (
+                self.supabase_client.table("archon_tasks")
+                .select("*")
+                .eq("id", task_id)
+                .execute()
+            )
+
+            if not old_task_response.data:
+                return False, {"error": f"Task with ID {task_id} not found"}
+
+            old_task = old_task_response.data[0]
+
             # Build update data
             update_data = {"updated_at": datetime.now().isoformat()}
 
@@ -447,8 +485,20 @@ class TaskService:
                     if not is_valid:
                         return False, {"error": error_msg}
 
-                    # Auto-set started_at when transitioning to "doing"
+                    # Check unresolved blockers before allowing "doing"
                     if update_fields["status"] == "doing" and current_status != "doing":
+                        from .task_dependency_service import TaskDependencyService
+                        dep_service = TaskDependencyService(self.supabase_client)
+                        unresolved = await dep_service.get_unresolved_blockers(task_id)
+                        if unresolved:
+                            blocker_titles = [b["title"] for b in unresolved[:3]]
+                            suffix = f" (+{len(unresolved) - 3} more)" if len(unresolved) > 3 else ""
+                            return False, {
+                                "error": f"Cannot move to 'doing': blocked by {len(unresolved)} unresolved task(s): "
+                                         f"{', '.join(blocker_titles)}{suffix}"
+                            }
+
+                        # Auto-set started_at when transitioning to "doing"
                         update_data["started_at"] = datetime.now().isoformat()
 
                     # Auto-set completed_at when transitioning to "done"
@@ -495,6 +545,34 @@ class TaskService:
             if response.data:
                 task = response.data[0]
 
+                # Send notifications based on what changed
+                actor_id = update_fields.get("updated_by", "system")
+
+                # Notify on status change
+                if "status" in update_fields and old_task["status"] != task["status"]:
+                    if task["assignee"] and task["assignee"] != "User":
+                        _send_notification_safe(
+                            "notify_task_status_changed",
+                            task_id=task["id"],
+                            assignee_id=task["assignee"],
+                            project_id=task["project_id"],
+                            task_title=task["title"],
+                            old_status=old_task["status"],
+                            new_status=task["status"],
+                            actor_id=actor_id,
+                        )
+
+                # Notify on assignee change
+                if "assignee" in update_fields and old_task["assignee"] != task["assignee"]:
+                    if task["assignee"] and task["assignee"] != "User" and task["assignee"] != actor_id:
+                        _send_notification_safe(
+                            "notify_task_assigned",
+                            task_id=task["id"],
+                            assignee_id=task["assignee"],
+                            project_id=task["project_id"],
+                            task_title=task["title"],
+                            actor_id=actor_id,
+                        )
 
                 return True, {"task": task, "message": "Task updated successfully"}
             else:

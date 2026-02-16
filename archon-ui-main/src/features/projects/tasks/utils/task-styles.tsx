@@ -51,10 +51,8 @@ export const getOrderGlow = (order: number) => {
 };
 
 // Get column header color based on status
-export const getColumnColor = (status: "backlog" | "todo" | "doing" | "review" | "done") => {
+export const getColumnColor = (status: "todo" | "doing" | "review" | "done") => {
   switch (status) {
-    case "backlog":
-      return "text-slate-500 dark:text-slate-400";
     case "todo":
       return "text-gray-600 dark:text-gray-400";
     case "doing":
@@ -67,10 +65,8 @@ export const getColumnColor = (status: "backlog" | "todo" | "doing" | "review" |
 };
 
 // Get column header glow based on status
-export const getColumnGlow = (status: "backlog" | "todo" | "doing" | "review" | "done") => {
+export const getColumnGlow = (status: "todo" | "doing" | "review" | "done") => {
   switch (status) {
-    case "backlog":
-      return "bg-slate-500/30 dark:bg-slate-400/40";
     case "todo":
       return "bg-gray-500/30 dark:bg-gray-400/40";
     case "doing":

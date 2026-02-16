@@ -914,6 +914,20 @@ CREATE TABLE IF NOT EXISTS archon_tasks (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Task Dependencies table for blocking relationships
+CREATE TABLE IF NOT EXISTS archon_task_dependencies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID NOT NULL REFERENCES archon_tasks(id) ON DELETE CASCADE,
+  depends_on_id UUID NOT NULL REFERENCES archon_tasks(id) ON DELETE CASCADE,
+  dependency_type TEXT NOT NULL DEFAULT 'blocks' CHECK (dependency_type IN ('blocks')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(task_id, depends_on_id),
+  CHECK (task_id != depends_on_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_deps_task_id ON archon_task_dependencies(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_deps_depends_on_id ON archon_task_dependencies(depends_on_id);
+
 -- Project Sources junction table for many-to-many relationship
 CREATE TABLE IF NOT EXISTS archon_project_sources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1127,6 +1141,7 @@ CREATE OR REPLACE TRIGGER update_archon_prompts_updated_at
 -- Enable Row Level Security (RLS) for all tables
 ALTER TABLE archon_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE archon_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE archon_task_dependencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE archon_project_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE archon_document_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE archon_prompts ENABLE ROW LEVEL SECURITY;
@@ -1136,6 +1151,9 @@ CREATE POLICY "Allow service role full access to archon_projects" ON archon_proj
     FOR ALL USING (auth.role() = 'service_role');
 
 CREATE POLICY "Allow service role full access to archon_tasks" ON archon_tasks
+    FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Allow service role full access to archon_task_dependencies" ON archon_task_dependencies
     FOR ALL USING (auth.role() = 'service_role');
 
 CREATE POLICY "Allow service role full access to archon_project_sources" ON archon_project_sources
@@ -1153,6 +1171,10 @@ CREATE POLICY "Allow authenticated users to read and update archon_projects" ON 
     USING (true);
 
 CREATE POLICY "Allow authenticated users to read and update archon_tasks" ON archon_tasks
+    FOR ALL TO authenticated
+    USING (true);
+
+CREATE POLICY "Allow authenticated users to read and update archon_task_dependencies" ON archon_task_dependencies
     FOR ALL TO authenticated
     USING (true);
 

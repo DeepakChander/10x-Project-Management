@@ -3,6 +3,7 @@ import type React from "react";
 import { Link, useLocation } from "react-router-dom";
 // TEMPORARY: Use old SettingsContext until settings are migrated
 import { useSettings } from "../../contexts/SettingsContext";
+import { NotificationBell } from "../../features/notifications/components/NotificationBell";
 import { glassmorphism } from "../../features/ui/primitives/styles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../features/ui/primitives/tooltip";
 import { cn } from "../../lib/utils";
@@ -127,6 +128,9 @@ export function Navigation({ className }: NavigationProps) {
           <p>{projectsEnabled ? "Project Management" : "Projects Disabled"}</p>
         </TooltipContent>
       </Tooltip>
+
+      {/* Notification Bell */}
+      <NotificationBell />
 
       {/* Separator */}
       <div className="w-8 h-px bg-gradient-to-r from-transparent via-stone-300 dark:via-stone-700 to-transparent" />

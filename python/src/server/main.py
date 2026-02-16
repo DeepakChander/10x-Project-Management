@@ -19,16 +19,21 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api_routes.agent_chat_api import router as agent_chat_router
+from .api_routes.ai_api import router as ai_router
 from .api_routes.bug_report_api import router as bug_report_router
 from .api_routes.internal_api import router as internal_router
 from .api_routes.knowledge_api import router as knowledge_router
 from .api_routes.mcp_api import router as mcp_router
 from .api_routes.migration_api import router as migration_router
+from .api_routes.notifications_api import router as notifications_router
 from .api_routes.ollama_api import router as ollama_router
+from .api_routes.organizations_api import router as organizations_router
 from .api_routes.pages_api import router as pages_router
 from .api_routes.progress_api import router as progress_router
 from .api_routes.projects_api import router as projects_router
 from .api_routes.providers_api import router as providers_router
+from .api_routes.roles_api import router as roles_router
+from .api_routes.sprints_api import router as sprints_router
 from .api_routes.version_api import router as version_router
 
 # Import modular API routers
@@ -194,6 +199,11 @@ app.include_router(bug_report_router)
 app.include_router(providers_router)
 app.include_router(version_router)
 app.include_router(migration_router)
+app.include_router(organizations_router)
+app.include_router(roles_router)
+app.include_router(sprints_router)
+app.include_router(notifications_router)
+app.include_router(ai_router)
 
 
 # Root endpoint

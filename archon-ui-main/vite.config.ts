@@ -326,7 +326,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     },
     define: {
       // CRITICAL: Don't inject Docker internal hostname into the build
-      // The browser can't resolve Docker service names
+      // The browser can't resolve 'archon-server'
       'import.meta.env.VITE_HOST': JSON.stringify(isDocker ? 'localhost' : host),
       'import.meta.env.VITE_PORT': JSON.stringify(port),
       'import.meta.env.PROD': env.PROD === 'true',

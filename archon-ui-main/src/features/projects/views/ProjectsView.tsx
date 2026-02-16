@@ -1,10 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Activity, CheckCircle2, FileText, LayoutGrid, List, ListTodo, Pin } from "lucide-react";
+import { Activity, CheckCircle2, FileText, LayoutGrid, List, ListTodo, Pin, Target } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStaggeredEntrance } from "../../../hooks/useStaggeredEntrance";
+import { AISuggestionsPanel } from "../../ai/components/AISuggestionsPanel";
+import { AISprintPlanner } from "../../ai/components/AISprintPlanner";
 import { isOptimistic } from "../../shared/utils/optimistic";
+import { SprintBoard } from "../../sprints/components/SprintBoard";
+import { SprintCapacityCard } from "../../sprints/components/SprintCapacityCard";
+import { SprintSelector } from "../../sprints/components/SprintSelector";
+import { useActiveSprint } from "../../sprints/hooks/useSprintQueries";
 import { DeleteConfirmModal } from "../../ui/components/DeleteConfirmModal";
 import { OptimisticIndicator } from "../../ui/primitives/OptimisticIndicator";
 import { Button, PillNavigation, SelectableCard } from "../../ui/primitives";
@@ -62,6 +68,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
   // React Query hooks
   const { data: projects = [], isLoading: isLoadingProjects, error: projectsError } = useProjects();
   const { data: taskCounts = {}, refetch: refetchTaskCounts } = useTaskCounts();
+  const { data: activeSprint } = useActiveSprint(selectedProject?.id);
 
   // Mutations
   const updateProjectMutation = useUpdateProject();
@@ -214,6 +221,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                   items={[
                     { id: "docs", label: "Docs", icon: <FileText className="w-4 h-4" /> },
                     { id: "tasks", label: "Tasks", icon: <ListTodo className="w-4 h-4" /> },
+                    { id: "sprint", label: "Sprint", icon: <Target className="w-4 h-4" /> },
                   ]}
                   activeSection={activeTab}
                   onSectionClick={(id) => setActiveTab(id as string)}
@@ -230,6 +238,35 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
               <div>
                 {activeTab === "docs" && <DocsTab project={selectedProject} />}
                 {activeTab === "tasks" && <TasksTab projectId={selectedProject.id} />}
+                {activeTab === "sprint" && (
+                  <div className="space-y-6">
+                    {/* Sprint Selector + AI Planner */}
+                    <div className="flex items-center gap-3">
+                      <SprintSelector projectId={selectedProject.id} />
+                      <AISprintPlanner
+                        projectId={selectedProject.id}
+                        capacityHours={160}
+                        onPlanAccepted={(taskIds) => {
+                          console.log("AI plan accepted:", taskIds);
+                        }}
+                      />
+                    </div>
+
+                    {/* AI Suggestions Panel */}
+                    <AISuggestionsPanel projectId={selectedProject.id} />
+
+                    {/* Sprint Capacity Card */}
+                    {activeSprint && (
+                      <SprintCapacityCard sprintId={activeSprint.id} />
+                    )}
+
+                    {/* Sprint Board */}
+                    <SprintBoard
+                      projectId={selectedProject.id}
+                      sprintId={activeSprint?.id || null}
+                    />
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -259,7 +296,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                     key={project.id}
                     project={project}
                     isSelected={selectedProject?.id === project.id}
-                    taskCounts={taskCounts[project.id] || { backlog: 0, todo: 0, doing: 0, review: 0, done: 0 }}
+                    taskCounts={taskCounts[project.id] || { todo: 0, doing: 0, review: 0, done: 0 }}
                     onSelect={() => handleProjectSelect(project)}
                   />
                 ))}
@@ -293,6 +330,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                       items={[
                         { id: "docs", label: "Docs", icon: <FileText className="w-4 h-4" /> },
                         { id: "tasks", label: "Tasks", icon: <ListTodo className="w-4 h-4" /> },
+                        { id: "sprint", label: "Sprint", icon: <Target className="w-4 h-4" /> },
                       ]}
                       activeSection={activeTab}
                       onSectionClick={(id) => setActiveTab(id as string)}
@@ -310,6 +348,23 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                 <div>
                   {activeTab === "docs" && <DocsTab project={selectedProject} />}
                   {activeTab === "tasks" && <TasksTab projectId={selectedProject.id} />}
+                  {activeTab === "sprint" && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3">
+                        <SprintSelector projectId={selectedProject.id} />
+                        <AISprintPlanner
+                          projectId={selectedProject.id}
+                          capacityHours={160}
+                          onPlanAccepted={(taskIds) => {
+                            console.log("AI plan accepted:", taskIds);
+                          }}
+                        />
+                      </div>
+                      <AISuggestionsPanel projectId={selectedProject.id} />
+                      {activeSprint && <SprintCapacityCard sprintId={activeSprint.id} />}
+                      <SprintBoard projectId={selectedProject.id} sprintId={activeSprint?.id || null} />
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -343,7 +398,6 @@ interface SidebarProjectCardProps {
   project: Project;
   isSelected: boolean;
   taskCounts: {
-    backlog: number;
     todo: number;
     doing: number;
     review: number;
