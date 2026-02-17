@@ -15,6 +15,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './features/ui/components/ToastProvider';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { TooltipProvider } from './features/ui/primitives/tooltip';
@@ -130,15 +131,17 @@ const AppContent = () => {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <ToastProvider>
-          <TooltipProvider>
-            <SettingsProvider>
-              <AppContent />
-            </SettingsProvider>
-          </TooltipProvider>
-        </ToastProvider>
-      </ThemeProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <TooltipProvider>
+              <SettingsProvider>
+                <AppContent />
+              </SettingsProvider>
+            </TooltipProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </AuthProvider>
       {import.meta.env.VITE_SHOW_DEVTOOLS === 'true' && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
