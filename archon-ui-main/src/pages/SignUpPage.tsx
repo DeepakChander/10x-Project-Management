@@ -29,19 +29,42 @@ export function SignUpPage() {
   const handleOrgSetup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // For MVP: Create user ID and save to localStorage
-    // In production: Call API to create user + org, get real user ID
-    const newUserId = crypto.randomUUID();
+    try {
+      // Call signup API
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          display_name: displayName,
+          password,
+          org_name: orgName,
+          company_domain: domain,
+        }),
+      });
 
-    // Save user session
-    localStorage.setItem("10x-user-id", newUserId);
-    localStorage.setItem("10x-user-name", displayName);
-    localStorage.setItem("10x-user-email", email);
-    localStorage.setItem("10x-user-role", "owner");
-    localStorage.setItem("10x-org-name", orgName);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Signup failed");
+      }
 
-    // Redirect to dashboard
-    navigate("/dashboard");
+      const data = await response.json();
+
+      // Save user session
+      localStorage.setItem("10x-user-id", data.user.id);
+      localStorage.setItem("10x-user-name", data.user.display_name);
+      localStorage.setItem("10x-user-email", data.user.email);
+      localStorage.setItem("10x-user-role", "owner");
+      if (data.organization) {
+        localStorage.setItem("10x-org-id", data.organization.id);
+        localStorage.setItem("10x-org-name", data.organization.name);
+      }
+
+      // Redirect to dashboard
+      navigate("/dashboard");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Signup failed");
+    }
   };
 
   return (
