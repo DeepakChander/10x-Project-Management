@@ -110,23 +110,16 @@ function AdminDashboard() {
       {/* Recent Activity */}
       <div className="p-6 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-800/50">
         <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          <ActivityItem
-            action="Sprint started"
-            detail="Sprint 1 - Foundation"
-            time="1 day ago"
-          />
-          <ActivityItem
-            action="Tasks assigned"
-            detail="47 tasks assigned to sprint"
-            time="1 day ago"
-          />
-          <ActivityItem
-            action="Invitation sent"
-            detail="team@example.com invited as Member"
-            time="5 minutes ago"
-          />
-        </div>
+        {stats.projects === 0 && stats.tasks === 0 ? (
+          <div className="py-8 text-center text-gray-500">
+            <p className="text-sm">No activity yet</p>
+            <p className="text-xs mt-1">Create your first project to get started!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="text-sm text-gray-500">Activity feed coming soon...</div>
+          </div>
+        )}
       </div>
     </div>
   );
