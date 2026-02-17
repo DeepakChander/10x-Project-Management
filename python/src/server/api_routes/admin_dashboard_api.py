@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     user_id: str = Depends(get_current_user_id),
-    perm: dict = Depends(require_role("admin")),
+    # No role requirement - any authenticated user can see their org stats
 ):
     """Get admin dashboard statistics. Requires: Admin role."""
     try:
@@ -86,7 +86,7 @@ async def get_dashboard_stats(
 @router.get("/team/members")
 async def get_team_members(
     user_id: str = Depends(get_current_user_id),
-    perm: dict = Depends(require_role("admin")),
+    # No role requirement - show team to all org members
 ):
     """Get all team members for organization. Requires: Admin role."""
     try:
