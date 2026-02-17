@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api_routes.agent_chat_api import router as agent_chat_router
 from .api_routes.ai_api import router as ai_router
 from .api_routes.auth_api import router as auth_router
+from .api_routes.agent_workflow_api import router as agent_workflow_router
 from .api_routes.analytics_api import router as analytics_router
 from .api_routes.bug_report_api import router as bug_report_router
 from .api_routes.internal_api import router as internal_router
@@ -210,6 +211,7 @@ app.include_router(ai_router)
 app.include_router(analytics_router)
 app.include_router(invitations_router)
 app.include_router(auth_router)
+app.include_router(agent_workflow_router)
 
 
 # Root endpoint
