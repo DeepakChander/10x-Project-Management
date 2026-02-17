@@ -10,6 +10,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { TeamPage } from './pages/TeamPage';
 import { InviteAcceptPage } from './pages/InviteAcceptPage';
 import { SignUpPage } from './pages/SignUpPage';
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { MainLayout } from './components/layout/MainLayout';
@@ -35,6 +36,7 @@ const AppRoutes = () => {
         <Route path="/" element={<KnowledgeBasePage />} />
         <Route path="/signup" element={<SignUpPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/invite/:token" element={<InviteAcceptPage />} />
         <Route path="/settings" element={<SettingsPage />} />

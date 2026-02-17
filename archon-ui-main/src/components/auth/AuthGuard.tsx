@@ -20,15 +20,15 @@ export function AuthGuard({ children }: AuthGuardProps) {
     const userId = localStorage.getItem("10x-user-id");
 
     // Public routes that don't need auth
-    const publicRoutes = ["/signup", "/invite"];
+    const publicRoutes = ["/signup", "/login", "/invite"];
 
     const isPublicRoute = publicRoutes.some((route) =>
       location.pathname.startsWith(route)
     );
 
-    // If no user and not on public route, redirect to signup
+    // If no user and not on public route, redirect to login
     if (!userId && !isPublicRoute) {
-      navigate("/signup");
+      navigate("/login");
     }
   }, [navigate, location.pathname]);
 

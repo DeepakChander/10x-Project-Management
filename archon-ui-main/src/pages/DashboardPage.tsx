@@ -5,6 +5,7 @@
  */
 
 import { BarChart3, Users, Target, CheckSquare } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../features/ui/primitives/button";
 import { cn } from "../features/ui/primitives/styles";
@@ -31,6 +32,38 @@ export function DashboardPage() {
 // Admin/Owner Dashboard
 function AdminDashboard() {
   const navigate = useNavigate();
+  const [stats, setStats] = useState({ users: 0, projects: 0, tasks: 0, sprints: 0 });
+
+  // Fetch real stats
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        // Get real data from APIs
+        const [projectsRes, tasksRes] = await Promise.all([
+          fetch("/api/projects", { headers: { "X-User-Id": localStorage.getItem("10x-user-id") || "" } }),
+          fetch("/api/projects/task-counts", { headers: { "X-User-Id": localStorage.getItem("10x-user-id") || "" } }),
+        ]);
+
+        const projects = await projectsRes.json();
+        const taskCounts = await tasksRes.json();
+
+        const totalTasks = Object.values(taskCounts).reduce((sum: number, counts: any) =>
+          sum + (counts.todo || 0) + (counts.doing || 0) + (counts.review || 0) + (counts.done || 0), 0
+        );
+
+        setStats({
+          users: 1, // TODO: Fetch from users API
+          projects: Array.isArray(projects) ? projects.length : 0,
+          tasks: totalTasks,
+          sprints: 1, // TODO: Fetch from sprints API
+        });
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      }
+    }
+
+    fetchStats();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -44,12 +77,12 @@ function AdminDashboard() {
         </p>
       </div>
 
-      {/* Quick Stats */}
+      {/* Quick Stats - Real Data */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Team Members" value="1" color="blue" />
-        <StatCard icon={Target} label="Active Projects" value="2" color="purple" />
-        <StatCard icon={CheckSquare} label="Tasks" value="80" color="green" />
-        <StatCard icon={BarChart3} label="Active Sprints" value="1" color="orange" />
+        <StatCard icon={Users} label="Team Members" value={stats.users.toString()} color="blue" />
+        <StatCard icon={Target} label="Active Projects" value={stats.projects.toString()} color="purple" />
+        <StatCard icon={CheckSquare} label="Tasks" value={stats.tasks.toString()} color="green" />
+        <StatCard icon={BarChart3} label="Active Sprints" value={stats.sprints.toString()} color="orange" />
       </div>
 
       {/* Quick Actions */}

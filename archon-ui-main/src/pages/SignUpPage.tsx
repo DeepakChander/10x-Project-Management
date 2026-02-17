@@ -2,7 +2,7 @@
  * Sign Up Page - First User Flow
  */
 
-import { Building, Mail, User } from "lucide-react";
+import { Building, Lock, Mail, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../features/ui/primitives/button";
@@ -15,6 +15,7 @@ export function SignUpPage() {
   // Step 1: User Info
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
 
   // Step 2: Organization Info
   const [orgName, setOrgName] = useState("");
@@ -84,6 +85,22 @@ export function SignUpPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  Password
+                </label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
               </div>
 
               <Button type="submit" className="w-full bg-[#C0745F] hover:bg-[#A85A45]">
