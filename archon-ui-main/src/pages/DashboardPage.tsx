@@ -34,35 +34,33 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ users: 0, projects: 0, tasks: 0, sprints: 0 });
 
-  // Fetch real stats
+  // Fetch real admin stats from dedicated endpoint
   useEffect(() => {
     async function fetchStats() {
       try {
-        // Get real data from APIs
-        const [projectsRes, tasksRes] = await Promise.all([
-          fetch("/api/projects", { headers: { "X-User-Id": localStorage.getItem("10x-user-id") || "" } }),
-          fetch("/api/projects/task-counts", { headers: { "X-User-Id": localStorage.getItem("10x-user-id") || "" } }),
-        ]);
+        const response = await fetch("/api/admin/dashboard/stats", {
+          headers: { "X-User-Id": localStorage.getItem("10x-user-id") || "" }
+        });
 
-        const projects = await projectsRes.json();
-        const taskCounts = await tasksRes.json();
+        if (!response.ok) throw new Error("Failed to fetch stats");
 
-        const totalTasks = Object.values(taskCounts).reduce((sum: number, counts: any) =>
-          sum + (counts.todo || 0) + (counts.doing || 0) + (counts.review || 0) + (counts.done || 0), 0
-        );
+        const data = await response.json();
 
         setStats({
-          users: 1, // TODO: Fetch from users API
-          projects: Array.isArray(projects) ? projects.length : 0,
-          tasks: totalTasks,
-          sprints: 1, // TODO: Fetch from sprints API
+          users: data.members.total,
+          projects: data.projects.total,
+          tasks: data.tasks.total,
+          sprints: data.sprints.active,
         });
       } catch (error) {
-        console.error("Failed to fetch stats:", error);
+        console.error("Failed to fetch admin stats:", error);
       }
     }
 
     fetchStats();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
