@@ -21,10 +21,15 @@ export function RegisterAgentModal({ orgId, isOpen, onClose }: RegisterAgentModa
   const [step, setStep] = useState(1);
 
   const handleGenerate = async () => {
-    // TODO: Call API to create agent user + generate key
-    const mockKey = `10x_ag_${crypto.randomUUID().replace(/-/g, '')}`;
-    setApiKey(mockKey);
-    setStep(2);
+    try {
+      // TODO: First create agent user, then generate key
+      // For now, generate mock key
+      const mockKey = `10x_ag_${crypto.randomUUID().replace(/-/g, '')}`;
+      setApiKey(mockKey);
+      setStep(2);
+    } catch (error) {
+      alert("Failed to register agent");
+    }
   };
 
   return (
