@@ -11,6 +11,7 @@ import { Input } from "../features/ui/primitives/input";
 export function SignUpPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [error, setError] = useState("");
 
   // Step 1: User Info
   const [email, setEmail] = useState("");
@@ -28,9 +29,9 @@ export function SignUpPage() {
 
   const handleOrgSetup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
 
     try {
-      // Call signup API
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -44,8 +45,17 @@ export function SignUpPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Signup failed");
+        const errorData = await response.json();
+        const errorMsg = errorData.detail || "Signup failed";
+
+        // If email exists, redirect to login
+        if (errorMsg.includes("already exists")) {
+          setError("Email already registered. Redirecting to login...");
+          setTimeout(() => navigate("/login"), 2000);
+          return; // STOP HERE - don't redirect to dashboard
+        }
+
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
@@ -60,10 +70,10 @@ export function SignUpPage() {
         localStorage.setItem("10x-org-name", data.organization.name);
       }
 
-      // Redirect to dashboard
+      // Only redirect if successful
       navigate("/dashboard");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Signup failed");
+      setError(error instanceof Error ? error.message : "Signup failed");
     }
   };
 
@@ -142,6 +152,13 @@ export function SignUpPage() {
                 You'll be the owner with full access
               </p>
             </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-800 dark:text-red-200">
+                {error}
+              </div>
+            )}
 
             <form onSubmit={handleOrgSetup} className="space-y-4">
               <div>
