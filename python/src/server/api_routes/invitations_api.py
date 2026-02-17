@@ -145,7 +145,7 @@ async def accept_invitation(
         result = service.accept_invitation(
             token=token,
             display_name=request.display_name,
-            password_hash=None,  # TODO: Hash password
+            password=request.password,  # Password will be hashed in service
         )
 
         return {
