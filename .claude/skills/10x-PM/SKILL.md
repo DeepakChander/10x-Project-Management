@@ -757,3 +757,98 @@ POST /api/api-keys/generate
 
 ---
 
+
+### 📊 Admin Dashboard (Latest)
+
+```
+GET    /api/admin/dashboard/stats       - Get real-time org statistics
+GET    /api/admin/team/members           - Get all organization members
+```
+
+**Example:**
+```python
+# Get admin dashboard stats
+GET /api/admin/dashboard/stats
+# Returns: {
+#   "members": {"total": 12, "by_role": {"owner": 1, "admin": 2, ...}},
+#   "projects": {"total": 8},
+#   "tasks": {"total": 142, "by_status": {...}},
+#   "sprints": {"total": 3, "active": 2},
+#   "pending_invitations": 3
+# }
+
+# Get all team members with roles
+GET /api/admin/team/members
+# Returns: [{
+#   "user_id": "...",
+#   "org_role": "lead",
+#   "status": "active",
+#   "archon_users_profile": {"display_name": "John Doe", "email": "..."}
+# }]
+```
+
+---
+
+### 💬 Comments & History (Latest)
+
+```
+POST   /api/tasks/{id}/comments          - Add comment to task
+GET    /api/tasks/{id}/comments           - Get all task comments
+GET    /api/tasks/{id}/status-history     - Get status change history
+```
+
+**Example:**
+```python
+# Add comment
+POST /api/tasks/{task_id}/comments
+{
+  "comment_text": "Started work on this. ETA 4 hours.",
+  "mentions": ["user-id-1", "user-id-2"]  # Optional @mentions
+}
+
+# Get comments
+GET /api/tasks/{task_id}/comments
+# Returns: [{
+#   "id": "comment-id",
+#   "comment_text": "...",
+#   "created_at": "...",
+#   "archon_users_profile": {"display_name": "Sarah"}
+# }]
+
+# Get status history
+GET /api/tasks/{task_id}/status-history
+# Returns: [{
+#   "old_status": "todo",
+#   "new_status": "doing",
+#   "time_in_previous_status": "PT2H30M",  # 2 hours 30 minutes
+#   "created_at": "..."
+# }]
+```
+
+---
+
+## Complete Endpoint Count
+
+**Total: 114 API Endpoints**
+
+Breakdown:
+- Organizations & Roles: 26
+- Sprints: 9
+- Notifications: 5
+- Projects & Tasks: 15
+- AI Features: 6
+- Analytics: 4
+- User Management: 13
+- Agent Workflow: 6
+- Admin Dashboard: 2 ← NEW
+- Comments: 3 ← NEW
+- Knowledge Base: 10
+- Documents: 8
+- System: 10
+
+---
+
+**COMPLETE PRODUCTION-READY MCP SKILL!**
+
+All 114 endpoints documented and ready for Claude Code/Cursor integration.
+
