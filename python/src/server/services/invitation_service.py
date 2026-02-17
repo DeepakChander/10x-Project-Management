@@ -153,7 +153,7 @@ class InvitationService:
         self,
         token: str,
         display_name: str,
-        password_hash: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Accept an invitation and create user account.
@@ -176,13 +176,19 @@ class InvitationService:
             if invitation["status"] != "pending":
                 raise ValueError(f"Invitation already {invitation['status']}")
 
-            # Create user profile
+            # Create user profile with hashed password
             user_data = {
                 "email": invitation["email"],
                 "display_name": display_name,
                 "user_type": "human",
                 "status": "active",
             }
+
+            # Hash password if provided
+            if password:
+                import hashlib
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                user_data["password_hash"] = password_hash
 
             user_response = self.client.table("archon_users_profile").insert(user_data).execute()
 
