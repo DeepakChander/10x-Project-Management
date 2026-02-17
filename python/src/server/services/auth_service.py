@@ -72,7 +72,7 @@ class AuthService:
 
             user = user_response.data[0]
 
-            # If org_name provided, create organization
+            # If org_name provided, create organization with default structure
             if org_name:
                 org_data = {
                     "name": org_name,
@@ -85,17 +85,46 @@ class AuthService:
                 if org_response.data:
                     org = org_response.data[0]
 
-                    # Add user as owner member
+                    # Create default department
+                    dept_response = self.client.table("archon_departments").insert({
+                        "org_id": org["id"],
+                        "name": "General",
+                        "head_id": user["id"],
+                    }).execute()
+
+                    dept = dept_response.data[0] if dept_response.data else None
+
+                    # Create default team
+                    team = None
+                    if dept:
+                        team_response = self.client.table("archon_teams").insert({
+                            "dept_id": dept["id"],
+                            "name": "General",
+                            "lead_id": user["id"],
+                        }).execute()
+                        team = team_response.data[0] if team_response.data else None
+
+                    # Add user as owner member with team assignment
                     self.client.table("archon_org_memberships").insert({
                         "user_id": user["id"],
                         "org_id": org["id"],
                         "org_role": "owner",
                         "status": "active",
+                        "team_id": team["id"] if team else None,
                     }).execute()
 
-                    logger.info(f"User registered and organization created | user={user['id']} | org={org['id']}")
+                    logger.info(
+                        f"User registered with org structure | user={user['id']} | "
+                        f"org={org['id']} | dept={dept['id'] if dept else 'none'} | "
+                        f"team={team['id'] if team else 'none'}"
+                    )
 
-                    return {"user": user, "organization": org}
+                    return {
+                        "user": user,
+                        "organization": org,
+                        "department": dept,
+                        "team": team,
+                    }
 
             logger.info(f"User registered | user={user['id']}")
             return {"user": user, "organization": None}
