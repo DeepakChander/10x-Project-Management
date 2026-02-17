@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ..middleware.permission_middleware import get_current_user_id, require_permission
 from ..services.ai_service import AIService
+from ..services.ai.provider_factory import AIProviderFactory
 from ..services.projects.task_service import TaskService
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ async def estimate_task(
 
         # Get AI estimation
         ai_service = AIService()
-        estimation = ai_service.estimate_task(
+        estimation = await ai_service.estimate_task(
             task_id=task_id,
             title=task["title"],
             description=task.get("description", ""),
@@ -95,7 +96,7 @@ async def plan_sprint(
     """
     try:
         ai_service = AIService()
-        plan = ai_service.plan_sprint(
+        plan = await ai_service.plan_sprint(
             project_id=project_id,
             sprint_capacity_hours=request.sprint_capacity_hours,
             current_velocity=request.current_velocity,
@@ -141,7 +142,7 @@ async def detect_dependencies(
 
         # Detect dependencies
         ai_service = AIService()
-        dependencies = ai_service.detect_dependencies(
+        dependencies = await ai_service.detect_dependencies(
             task_id=task_id,
             title=task["title"],
             description=task.get("description", ""),
@@ -230,4 +231,22 @@ async def accept_suggestion(
         raise
     except Exception as e:
         logger.error(f"Failed to accept suggestion {suggestion_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Get Available AI Providers ──────────────────────────────────
+
+@router.get("/providers")
+async def get_ai_providers() -> list[dict[str, Any]]:
+    """
+    Get list of available AI providers and their status.
+
+    No authentication required (read-only).
+    """
+    try:
+        providers = AIProviderFactory.get_available_providers()
+        return providers
+
+    except Exception as e:
+        logger.error(f"Failed to get AI providers: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

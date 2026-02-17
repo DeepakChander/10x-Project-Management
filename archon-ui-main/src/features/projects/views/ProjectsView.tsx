@@ -1,11 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Activity, CheckCircle2, FileText, LayoutGrid, List, ListTodo, Pin, Target } from "lucide-react";
+import { Activity, BarChart3, CheckCircle2, FileText, LayoutGrid, List, ListTodo, Pin, Target } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStaggeredEntrance } from "../../../hooks/useStaggeredEntrance";
 import { AISuggestionsPanel } from "../../ai/components/AISuggestionsPanel";
 import { AISprintPlanner } from "../../ai/components/AISprintPlanner";
+import { EnhancedAnalyticsView } from "../../analytics/views/EnhancedAnalyticsView";
 import { isOptimistic } from "../../shared/utils/optimistic";
 import { SprintBoard } from "../../sprints/components/SprintBoard";
 import { SprintCapacityCard } from "../../sprints/components/SprintCapacityCard";
@@ -222,6 +223,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                     { id: "docs", label: "Docs", icon: <FileText className="w-4 h-4" /> },
                     { id: "tasks", label: "Tasks", icon: <ListTodo className="w-4 h-4" /> },
                     { id: "sprint", label: "Sprint", icon: <Target className="w-4 h-4" /> },
+                    { id: "analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" /> },
                   ]}
                   activeSection={activeTab}
                   onSectionClick={(id) => setActiveTab(id as string)}
@@ -267,6 +269,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                     />
                   </div>
                 )}
+                {activeTab === "analytics" && <EnhancedAnalyticsView projectId={selectedProject.id} />}
               </div>
             </motion.div>
           )}
@@ -331,6 +334,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                         { id: "docs", label: "Docs", icon: <FileText className="w-4 h-4" /> },
                         { id: "tasks", label: "Tasks", icon: <ListTodo className="w-4 h-4" /> },
                         { id: "sprint", label: "Sprint", icon: <Target className="w-4 h-4" /> },
+                        { id: "analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" /> },
                       ]}
                       activeSection={activeTab}
                       onSectionClick={(id) => setActiveTab(id as string)}
@@ -365,6 +369,7 @@ export function ProjectsView({ className = "", "data-id": dataId }: ProjectsView
                       <SprintBoard projectId={selectedProject.id} sprintId={activeSprint?.id || null} />
                     </div>
                   )}
+                  {activeTab === "analytics" && <EnhancedAnalyticsView projectId={selectedProject.id} />}
                 </div>
               </>
             )}

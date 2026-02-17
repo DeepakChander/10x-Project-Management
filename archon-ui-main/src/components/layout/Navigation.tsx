@@ -1,4 +1,4 @@
-import { BookOpen, Palette, Settings } from "lucide-react";
+import { BookOpen, LayoutDashboard, Palette, Settings, User, Users } from "lucide-react";
 import type React from "react";
 import { Link, useLocation } from "react-router-dom";
 // TEMPORARY: Use old SettingsContext until settings are migrated
@@ -30,6 +30,12 @@ export function Navigation({ className }: NavigationProps) {
   // Navigation items configuration
   const navigationItems: NavigationItem[] = [
     {
+      path: "/dashboard",
+      icon: <LayoutDashboard className="h-5 w-5" />,
+      label: "Dashboard",
+      enabled: true,
+    },
+    {
       path: "/",
       icon: <BookOpen className="h-5 w-5" />,
       label: "Knowledge Base",
@@ -53,6 +59,12 @@ export function Navigation({ className }: NavigationProps) {
         </svg>
       ),
       label: "MCP Server",
+      enabled: true,
+    },
+    {
+      path: "/team",
+      icon: <Users className="h-5 w-5" />,
+      label: "Team",
       enabled: true,
     },
     {

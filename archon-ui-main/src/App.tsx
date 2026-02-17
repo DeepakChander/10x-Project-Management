@@ -7,6 +7,11 @@ import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { MCPPage } from './pages/MCPPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { TeamPage } from './pages/TeamPage';
+import { InviteAcceptPage } from './pages/InviteAcceptPage';
+import { SignUpPage } from './pages/SignUpPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { AuthGuard } from './components/auth/AuthGuard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './features/ui/components/ToastProvider';
@@ -25,11 +30,16 @@ const AppRoutes = () => {
   const { projectsEnabled, styleGuideEnabled } = useSettings();
 
   return (
-    <Routes>
-      <Route path="/" element={<KnowledgeBasePage />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
-      <Route path="/mcp" element={<MCPPage />} />
+    <AuthGuard>
+      <Routes>
+        <Route path="/" element={<KnowledgeBasePage />} />
+        <Route path="/signup" element={<SignUpPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/invite/:token" element={<InviteAcceptPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/mcp" element={<MCPPage />} />
+        <Route path="/team" element={<TeamPage />} />
       {styleGuideEnabled ? (
         <Route path="/style-guide" element={<StyleGuidePage />} />
       ) : (
@@ -44,6 +54,7 @@ const AppRoutes = () => {
         <Route path="/projects" element={<Navigate to="/" replace />} />
       )}
     </Routes>
+    </AuthGuard>
   );
 };
 

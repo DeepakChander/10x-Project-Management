@@ -13,6 +13,7 @@ import logging
 from typing import Any, Optional
 
 from ..utils import get_supabase_client
+from .ai.provider_factory import AIProviderFactory
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,11 @@ logger = logging.getLogger(__name__)
 class AIService:
     """Service for AI-powered PM features"""
 
-    def __init__(self, supabase_client=None):
+    def __init__(self, supabase_client=None, ai_provider: Optional[str] = None):
         self.client = supabase_client or get_supabase_client()
+        self.ai_provider = AIProviderFactory.get_provider(provider_name=ai_provider)
 
-    def estimate_task(
+    async def estimate_task(
         self,
         task_id: str,
         title: str,
@@ -48,12 +50,22 @@ class AIService:
             }
         """
         try:
-            # Build prompt for AI
-            prompt = self._build_estimation_prompt(title, description, project_context)
-
-            # Call AI (placeholder for now - will integrate with LLM)
-            # For beta: Use simple heuristics
-            estimation = self._simple_estimation_heuristic(title, description)
+            # Try AI provider first
+            try:
+                estimation = await self.ai_provider.estimate_task(
+                    title=title,
+                    description=description,
+                    project_context=project_context,
+                )
+                logger.info(
+                    f"AI estimation complete | task={task_id} | points={estimation['story_points']} | "
+                    f"provider={self.ai_provider.get_provider_name()} | model={self.ai_provider.get_model_name()}"
+                )
+            except Exception as ai_error:
+                # Fallback to heuristic if AI fails
+                logger.warning(f"AI provider failed, using heuristic fallback: {ai_error}")
+                estimation = self._simple_estimation_heuristic(title, description)
+                logger.info(f"Using heuristic estimation | task={task_id} | points={estimation['story_points']}")
 
             # Store suggestion in database
             self._store_suggestion(
@@ -65,13 +77,18 @@ class AIService:
                 suggestion_data=estimation,
             )
 
+            logger.info(
+                f"AI estimation complete | task={task_id} | points={estimation['story_points']} | "
+                f"provider={self.ai_provider.get_provider_name()} | model={self.ai_provider.get_model_name()}"
+            )
+
             return estimation
 
         except Exception as e:
             logger.error(f"Failed to estimate task {task_id}: {e}", exc_info=True)
             raise
 
-    def plan_sprint(
+    async def plan_sprint(
         self,
         project_id: str,
         sprint_capacity_hours: int,
@@ -98,8 +115,22 @@ class AIService:
             # Get backlog tasks
             backlog_tasks = self._get_backlog_tasks(project_id)
 
-            # Simple algorithm for beta (will be AI-powered later)
-            plan = self._simple_sprint_planning(backlog_tasks, sprint_capacity_hours)
+            # Try AI provider first
+            try:
+                plan = await self.ai_provider.plan_sprint(
+                    backlog_tasks=backlog_tasks,
+                    capacity_hours=sprint_capacity_hours,
+                    current_velocity=current_velocity,
+                )
+                logger.info(
+                    f"AI sprint planning complete | project={project_id} | tasks={len(plan['recommended_tasks'])} | "
+                    f"provider={self.ai_provider.get_provider_name()}"
+                )
+            except Exception as ai_error:
+                # Fallback to heuristic if AI fails
+                logger.warning(f"AI provider failed, using heuristic fallback: {ai_error}")
+                plan = self._simple_sprint_planning(backlog_tasks, sprint_capacity_hours)
+                logger.info(f"Using heuristic sprint planning | project={project_id} | tasks={len(plan['recommended_tasks'])}")
 
             # Store suggestion
             self._store_suggestion(
@@ -107,8 +138,13 @@ class AIService:
                 project_id=project_id,
                 title="Sprint Planning Recommendation",
                 description=f"Suggested {len(plan['recommended_tasks'])} tasks",
-                confidence=0.8,
+                confidence=plan.get("confidence", 0.8),
                 suggestion_data=plan,
+            )
+
+            logger.info(
+                f"AI sprint planning complete | project={project_id} | tasks={len(plan['recommended_tasks'])} | "
+                f"provider={self.ai_provider.get_provider_name()}"
             )
 
             return plan
@@ -117,7 +153,7 @@ class AIService:
             logger.error(f"Failed to plan sprint for project {project_id}: {e}", exc_info=True)
             raise
 
-    def detect_dependencies(
+    async def detect_dependencies(
         self,
         task_id: str,
         title: str,
@@ -138,8 +174,17 @@ class AIService:
             ]
         """
         try:
-            # Simple keyword matching for beta (will be AI-powered later)
-            dependencies = self._simple_dependency_detection(title, description, all_tasks)
+            # Use AI provider for dependency detection
+            dependencies = await self.ai_provider.detect_dependencies(
+                task_title=title,
+                task_description=description,
+                all_tasks=all_tasks,
+            )
+
+            logger.info(
+                f"AI dependency detection complete | task={task_id} | dependencies={len(dependencies)} | "
+                f"provider={self.ai_provider.get_provider_name()}"
+            )
 
             return dependencies
 
