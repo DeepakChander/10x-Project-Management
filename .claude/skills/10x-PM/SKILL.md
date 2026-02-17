@@ -644,3 +644,116 @@ AI_PROVIDER=claude  # claude, openai, or ollama
 ---
 
 Ready for enterprise deployment! 🚀
+
+### 🔐 Authentication (Phase 8)
+
+```
+POST   /api/auth/signup                     - Sign up (create user + org) [Public]
+POST   /api/auth/login                      - Login with email/password [Public]
+POST   /api/auth/logout                     - Logout (invalidate session)
+```
+
+**Example:**
+```python
+# Sign up (first user becomes owner)
+POST /api/auth/signup
+{
+  "email": "sarah@company.com",
+  "display_name": "Sarah Johnson",
+  "password": "SecurePass123!",
+  "org_name": "Acme Corp",
+  "company_domain": "acme.com"
+}
+# Returns: {user: {...}, organization: {...}}
+
+# Login
+POST /api/auth/login
+{
+  "email": "sarah@company.com",
+  "password": "SecurePass123!"
+}
+# Returns: {user: {...}, session_token: "..."}
+```
+
+---
+
+### 🤖 Agent Workflow (Phase 9)
+
+```
+POST   /api/agent/tasks/{id}/acknowledge    - Agent confirms task receipt
+POST   /api/agent/tasks/{id}/accept         - Agent accepts → moves to "doing"
+POST   /api/agent/tasks/{id}/decline        - Agent declines with reason
+POST   /api/agent/tasks/{id}/submit-review  - Agent submits for supervisor review
+POST   /api/agent/tasks/{id}/approve        - Supervisor approves → "done"
+POST   /api/api-keys/generate               - Generate agent API key
+```
+
+**Agent Workflow Example:**
+```python
+# 1. Agent acknowledges (within 5 seconds of assignment)
+POST /api/agent/tasks/{task_id}/acknowledge
+{
+  "response_time_ms": 1200,
+  "message": "Task received. Evaluating..."
+}
+
+# 2a. Agent ACCEPTS
+POST /api/agent/tasks/{task_id}/accept
+{
+  "message": "Task accepted. Starting work.",
+  "conditions": null  # or conditions for conditional acceptance
+}
+# → Task moves to "doing"
+
+# 2b. OR Agent DECLINES
+POST /api/agent/tasks/{task_id}/decline
+{
+  "reason": "Missing API specification document",
+  "suggestion": "Please provide API spec before assigning"
+}
+# → Task stays in "todo", supervisor notified
+
+# 3. Agent completes work and submits
+POST /api/agent/tasks/{task_id}/submit-review
+{
+  "submission_data": {
+    "output": "Generated documentation",
+    "files": ["api-docs.md"]
+  },
+  "confidence_score": 0.87,
+  "flagged_items": ["Section 3.2 needs human review"],
+  "message": "Work complete. 87% confident. Please review Section 3.2."
+}
+# → Task moves to "review", supervisor notified
+
+# 4. Supervisor reviews and approves
+POST /api/agent/tasks/{task_id}/approve?agent_id={agent_id}
+{
+  "quality_score": 9,
+  "comments": "Excellent work! Minor edits to Section 3.2."
+}
+# → Task moves to "done"
+```
+
+**Agent Registration:**
+```python
+# Generate API key for agent
+POST /api/api-keys/generate
+{
+  "agent_user_id": "agent-uuid",
+  "key_name": "Claude Code Production",
+  "webhook_url": "https://your-agent.com/webhooks/10x-pm",
+  "capabilities": {
+    "can_create_tasks": true,
+    "can_update_tasks": true,
+    "can_delete_tasks": false,
+    "can_approve": false
+  },
+  "supervisor_id": "supervisor-uuid"
+}
+# Returns: {api_key: "10x_ag_...", key_prefix: "10x_ag_abc"}
+# ⚠️ Save API key - shown only once!
+```
+
+---
+
