@@ -24,6 +24,7 @@ from .api_routes.auth_api import router as auth_router
 from .api_routes.agent_workflow_api import router as agent_workflow_router
 from .api_routes.api_keys_api import router as api_keys_router
 from .api_routes.admin_dashboard_api import router as admin_dashboard_router
+from .api_routes.comments_api import router as comments_router
 from .api_routes.analytics_api import router as analytics_router
 from .api_routes.bug_report_api import router as bug_report_router
 from .api_routes.internal_api import router as internal_router
@@ -215,6 +216,7 @@ app.include_router(invitations_router)
 app.include_router(auth_router)
 app.include_router(api_keys_router)
 app.include_router(admin_dashboard_router)
+app.include_router(comments_router)
 app.include_router(agent_workflow_router)
 
 
