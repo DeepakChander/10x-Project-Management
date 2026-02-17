@@ -1,101 +1,150 @@
 /**
- * Team Management View
- *
- * Dashboard for managing team members and invitations
+ * Team Management View - Production Version
  */
 
-import { Mail, Plus, Shield, Users } from "lucide-react";
-import { useState } from "react";
+import { Mail, Plus, Shield, Users, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "../../ui/primitives/button";
 import { cn } from "../../ui/primitives/styles";
 import { InviteUserModal } from "../components/InviteUserModal";
+import { TeamMemberList } from "../components/TeamMemberList";
 
 interface TeamManagementViewProps {
   orgId: string;
-  projectId?: string;
   className?: string;
 }
 
-export function TeamManagementView({ orgId, projectId, className }: TeamManagementViewProps) {
+interface TeamMember {
+  user_id: string;
+  org_role: string;
+  status: string;
+  archon_users_profile: {
+    id: string;
+    display_name: string;
+    email: string;
+    user_type: string;
+  };
+}
+
+export function TeamManagementView({ orgId, className }: TeamManagementViewProps) {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [invitations, setInvitations] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch team data
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchTeamData() {
+      try {
+        const userId = localStorage.getItem("10x-user-id");
+        const headers = { "X-User-Id": userId || "" };
+
+        const [membersRes, invitesRes] = await Promise.all([
+          fetch("/api/admin/team/members", { headers }),
+          fetch(`/api/invitations/${orgId}`, { headers }).catch(() => ({ ok: false })),
+        ]);
+
+        if (!mounted) return;
+
+        if (membersRes.ok) {
+          const data = await membersRes.json();
+          setMembers(data);
+        }
+
+        if (invitesRes.ok) {
+          const data = await invitesRes.json();
+          setInvitations(data.filter((inv: any) => inv.status === "pending"));
+        }
+      } catch (error) {
+        console.error("Failed to fetch team data:", error);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    fetchTeamData();
+    const interval = setInterval(fetchTeamData, 30000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [orgId]);
+
+  const roleCount = members.reduce((acc, m) => {
+    acc[m.org_role] = (acc[m.org_role] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 text-[#C0745F] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className={cn("space-y-6", className)}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Users className="w-6 h-6 text-[#C0745F] dark:text-[#D4917A]" />
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Team Management</h2>
+          <Users className="w-6 h-6 text-[#C0745F]" />
+          <h2 className="text-2xl font-bold">Team Management</h2>
         </div>
-
-        {/* Invite Button */}
-        <Button
-          onClick={() => setIsInviteModalOpen(true)}
-          className="bg-[#C0745F] hover:bg-[#A85A45]"
-        >
+        <Button onClick={() => setIsInviteModalOpen(true)} className="bg-[#C0745F]">
           <Plus className="w-4 h-4 mr-1" />
           Invite Team Member
         </Button>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-800/50">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-blue-600" />
-            <span className="text-xs text-gray-600 dark:text-gray-400">Total Members</span>
-          </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">0</div>
-        </div>
-
-        <div className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-800/50">
-          <div className="flex items-center gap-2 mb-2">
-            <Mail className="w-4 h-4 text-orange-600" />
-            <span className="text-xs text-gray-600 dark:text-gray-400">Pending Invites</span>
-          </div>
-          <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">0</div>
-        </div>
-
-        <div className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-800/50">
-          <div className="flex items-center gap-2 mb-2">
-            <Shield className="w-4 h-4 text-purple-600" />
-            <span className="text-xs text-gray-600 dark:text-gray-400">Admins</span>
-          </div>
-          <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">0</div>
-        </div>
-
-        <div className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-800/50">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-green-600" />
-            <span className="text-xs text-gray-600 dark:text-gray-400">Active</span>
-          </div>
-          <div className="text-3xl font-bold text-green-600 dark:text-green-400">1</div>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-4">
+        <StatBox icon={Users} label="Total Members" value={members.length} color="blue" />
+        <StatBox icon={Mail} label="Pending Invites" value={invitations.length} color="orange" />
+        <StatBox icon={Shield} label="Admins" value={roleCount.admin || roleCount.owner || 0} color="purple" />
+        <StatBox icon={Users} label="Active" value={members.filter(m => m.status === "active").length} color="green" />
       </div>
 
-      {/* Coming Soon Message */}
-      <div className="p-12 text-center bg-white/30 dark:bg-zinc-900/30 backdrop-blur-sm rounded-lg border border-gray-200/30 dark:border-gray-800/30">
-        <Users className="w-16 h-16 text-[#C0745F] dark:text-[#D4917A] mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-          Team Management UI
-        </h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          User list, role assignments, and team dashboard coming soon!
-        </p>
-        <p className="text-sm text-gray-500">
-          Backend is ready - click "Invite Team Member" to test the invitation system!
-        </p>
-      </div>
+      {/* Team List */}
+      <TeamMemberList members={members.map(m => ({
+        id: m.archon_users_profile.id,
+        display_name: m.archon_users_profile.display_name,
+        email: m.archon_users_profile.email,
+        user_type: m.archon_users_profile.user_type as "human" | "agent",
+        org_role: m.org_role,
+        status: m.status,
+      }))} />
 
-      {/* Invite Modal */}
       <InviteUserModal
         orgId={orgId}
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
         onInviteSent={() => {
-          console.log("Invitation sent!");
+          setIsInviteModalOpen(false);
+          setTimeout(() => window.location.reload(), 1000);
         }}
       />
     </div>
   );
 }
+
+function StatBox({ icon: Icon, label, value, color }: any) {
+  const colors = {
+    blue: "bg-blue-50 text-blue-600",
+    orange: "bg-orange-50 text-orange-600",
+    purple: "bg-purple-50 text-purple-600",
+    green: "bg-green-50 text-green-600",
+  };
+
+  return (
+    <div className={cn("p-4 rounded-lg", colors[color])}>
+      <Icon className="w-5 h-5 mb-2" />
+      <div className="text-3xl font-bold">{value}</div>
+      <div className="text-sm">{label}</div>
+    </div>
+  );
+}
+
