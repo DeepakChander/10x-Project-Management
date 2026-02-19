@@ -16,7 +16,7 @@ import json
 import logging
 from typing import Any, Optional
 
-from ..config.database import get_supabase_client
+from src.server.utils import get_supabase_client
 from .ai.observation_processor import AIObservationProcessor
 from .ai.pattern_extractor import AIPatternExtractorService
 from .ai.team_intelligence import AITeamIntelligenceService

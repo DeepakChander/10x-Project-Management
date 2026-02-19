@@ -16,7 +16,7 @@ Event routing:
 import logging
 from typing import Optional
 
-from ...config.database import get_supabase_client
+from src.server.utils import get_supabase_client
 from .pattern_extractor import AIPatternExtractorService
 from .team_intelligence import AITeamIntelligenceService
 from .quality_patterns import AIQualityPatternService

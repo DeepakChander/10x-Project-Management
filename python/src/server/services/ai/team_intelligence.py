@@ -9,7 +9,7 @@ collaboration patterns from task completion history.
 import logging
 from typing import Optional
 
-from ...config.database import get_supabase_client
+from src.server.utils import get_supabase_client
 
 logger = logging.getLogger(__name__)
 

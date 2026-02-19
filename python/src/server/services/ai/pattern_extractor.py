@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from ...config.database import get_supabase_client
+from src.server.utils import get_supabase_client
 from .quality_patterns import TASK_TYPE_CATEGORY_MAP
 
 logger = logging.getLogger(__name__)
