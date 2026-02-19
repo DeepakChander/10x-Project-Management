@@ -143,6 +143,9 @@ async def logout(request: LogoutRequest) -> dict[str, str]:
     Logout and invalidate session.
     """
     try:
+        from ..middleware.permission_middleware import invalidate_session_cache
+        invalidate_session_cache(request.session_token)
+
         service = AuthService()
         service.logout(request.session_token)
 

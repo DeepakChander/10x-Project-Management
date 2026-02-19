@@ -61,6 +61,10 @@ class AuthService:
         team_id = None
 
         try:
+            # Validate password length server-side (client enforces 6 chars but API must too)
+            if not password or len(password) < 6:
+                raise ValueError("Password must be at least 6 characters long")
+
             # Check if user exists
             existing = (
                 self.client.table("archon_users_profile")

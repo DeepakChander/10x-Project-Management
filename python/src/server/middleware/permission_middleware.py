@@ -7,6 +7,7 @@ and this middleware resolves the user's effective role and checks permissions.
 """
 
 import logging
+import time
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Header, Request
@@ -15,6 +16,29 @@ from ..services.permission_service import PermissionService
 from ..services.role_service import RoleService
 
 logger = logging.getLogger(__name__)
+
+# In-memory session validation cache: token -> (user_id, expires_at)
+# Avoids a DB round-trip on every API request; entries expire after 60 seconds.
+_session_cache: dict[str, tuple[str, float]] = {}
+_SESSION_CACHE_TTL = 60.0  # seconds
+
+
+def _get_cached_session(token: str) -> Optional[str]:
+    """Return cached user_id for token if still valid, else None."""
+    entry = _session_cache.get(token)
+    if entry and time.monotonic() < entry[1]:
+        return entry[0]
+    _session_cache.pop(token, None)
+    return None
+
+
+def _cache_session(token: str, user_id: str) -> None:
+    _session_cache[token] = (user_id, time.monotonic() + _SESSION_CACHE_TTL)
+
+
+def invalidate_session_cache(token: str) -> None:
+    """Remove a session from the cache (call on logout)."""
+    _session_cache.pop(token, None)
 
 
 async def get_current_user_id(
@@ -26,6 +50,7 @@ async def get_current_user_id(
 
     Requires X-User-Id. When X-Session-Token is also provided, validates
     it against active sessions in the database to prevent session forgery.
+    Results are cached in-memory for 60 seconds to reduce DB load.
     Agent and internal calls that omit X-Session-Token are allowed through
     with only the user ID check.
     """
@@ -36,23 +61,30 @@ async def get_current_user_id(
         )
 
     if x_session_token:
-        try:
-            from ..utils import get_supabase_client
-            client = get_supabase_client()
-            session_resp = (
-                client.table("archon_user_sessions")
-                .select("user_id")
-                .eq("session_token", x_session_token)
-                .execute()
-            )
-            if not session_resp.data:
-                raise HTTPException(status_code=401, detail="Invalid or expired session. Please log in again.")
-            if session_resp.data[0]["user_id"] != x_user_id:
+        # Check in-memory cache first
+        cached_user_id = _get_cached_session(x_session_token)
+        if cached_user_id is not None:
+            if cached_user_id != x_user_id:
                 raise HTTPException(status_code=401, detail="Session token does not match user.")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"Session validation error (non-blocking): {e}")
+        else:
+            try:
+                from ..utils import get_supabase_client
+                client = get_supabase_client()
+                session_resp = (
+                    client.table("archon_user_sessions")
+                    .select("user_id")
+                    .eq("session_token", x_session_token)
+                    .execute()
+                )
+                if not session_resp.data:
+                    raise HTTPException(status_code=401, detail="Invalid or expired session. Please log in again.")
+                if session_resp.data[0]["user_id"] != x_user_id:
+                    raise HTTPException(status_code=401, detail="Session token does not match user.")
+                _cache_session(x_session_token, x_user_id)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.warning(f"Session validation error (non-blocking): {e}")
 
     return x_user_id
 

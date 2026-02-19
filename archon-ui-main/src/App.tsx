@@ -70,17 +70,27 @@ function EmailVerificationBanner() {
   const { user } = useAuth();
   const [dismissed, setDismissed] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   if (!user || user.email_verified || dismissed) return null;
 
   const resend = async () => {
     setResending(true);
+    setResendMessage(null);
     try {
-      await fetch("/api/auth/resend-verification", {
+      const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: user.email }),
       });
+      if (res.ok) {
+        setResendMessage({ text: "Verification email sent!", ok: true });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setResendMessage({ text: data.detail || "Failed to resend. Try again.", ok: false });
+      }
+    } catch {
+      setResendMessage({ text: "Network error. Please try again.", ok: false });
     } finally {
       setResending(false);
     }
@@ -89,14 +99,20 @@ function EmailVerificationBanner() {
   return (
     <div className="fixed top-0 left-0 right-0 z-[60] bg-amber-500 text-white px-4 py-2 flex items-center justify-center gap-3 text-sm shadow-md">
       <span>Please verify your email to unlock all features.</span>
-      <button
-        type="button"
-        onClick={resend}
-        disabled={resending}
-        className="underline font-medium hover:no-underline disabled:opacity-60"
-      >
-        {resending ? "Sending..." : "Resend verification email"}
-      </button>
+      {resendMessage ? (
+        <span className={resendMessage.ok ? "font-medium" : "font-medium opacity-90"}>
+          {resendMessage.text}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={resend}
+          disabled={resending}
+          className="underline font-medium hover:no-underline disabled:opacity-60"
+        >
+          {resending ? "Sending..." : "Resend verification email"}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setDismissed(true)}
