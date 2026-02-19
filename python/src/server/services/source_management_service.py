@@ -242,7 +242,7 @@ async def update_source_info(
     try:
         # First, check if source already exists to preserve title
         existing_source = (
-            client.table("archon_sources").select("title").eq("source_id", source_id).execute()
+            client.table("archon_sources").select("title").eq("id", source_id).execute()
         )
 
         if existing_source.data:

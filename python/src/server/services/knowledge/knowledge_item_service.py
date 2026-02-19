@@ -319,7 +319,7 @@ class KnowledgeItemService:
         """
         try:
             # Query the sources table
-            result = self.supabase.from_("archon_sources").select("*").order("source_id").execute()
+            result = self.supabase.from_("archon_sources").select("*").order("created_at", desc=True).execute()
 
             # Format the sources
             sources = []
