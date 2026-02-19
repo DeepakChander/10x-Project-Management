@@ -38,6 +38,12 @@ DELETE FROM archon_notification_preferences;
 -- Role assignments
 DELETE FROM archon_role_assignments;
 
+-- Agent workflow data (Phase 9)
+DELETE FROM archon_webhook_deliveries;
+DELETE FROM archon_agent_task_reviews;
+DELETE FROM archon_task_acknowledgements;
+DELETE FROM archon_agent_webhooks;
+
 -- Project & task data
 DELETE FROM archon_document_versions;
 DELETE FROM archon_task_dependencies;

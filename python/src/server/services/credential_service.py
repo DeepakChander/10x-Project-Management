@@ -128,8 +128,14 @@ class CredentialService:
         try:
             supabase = self._get_supabase_client()
 
-            # Fetch all credentials
-            result = supabase.table("archon_settings").select("*").execute()
+            # Fetch all credentials (gracefully handle missing table)
+            try:
+                result = supabase.table("archon_settings").select("*").execute()
+            except Exception as e:
+                # Table might not exist yet (migrations not run)
+                logger.warning(f"Could not load credentials from database: {e}")
+                logger.info("Continuing with empty credential cache. Run migrations to create archon_settings table.")
+                return {}
 
             credentials = {}
             for item in result.data:

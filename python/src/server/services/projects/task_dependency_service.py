@@ -153,12 +153,12 @@ class TaskDependencyService:
         Returns a map keyed by task_id with blocks and blocked_by arrays.
         """
         try:
-            # Get all task IDs in the project
+            # Get all task IDs in the project (include NULL archived as non-archived)
             tasks_response = (
                 self.supabase_client.table("archon_tasks")
                 .select("id, title, status")
                 .eq("project_id", project_id)
-                .eq("archived", False)
+                .or_("archived.is.null,archived.is.false")
                 .execute()
             )
 

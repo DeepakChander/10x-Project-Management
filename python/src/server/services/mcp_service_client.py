@@ -215,8 +215,9 @@ class MCPServiceClient:
             async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
                 response = await client.get(urljoin(self.agents_url, "/health"))
                 health_status["agents_service"] = response.status_code == 200
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Agents service health check failed: {e}")
+            # Service is down, health_status already defaults to False
 
         return health_status
 

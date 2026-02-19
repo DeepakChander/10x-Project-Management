@@ -35,66 +35,7 @@ class AcceptInvitationRequest(BaseModel):
     password: str | None = None
 
 
-# ── Create Invitation ────────────────────────────────────────────
-
-@router.post("/{org_id}")
-async def create_invitation(
-    org_id: str,
-    request: CreateInvitationRequest,
-    user_id: str = Depends(get_current_user_id),
-    perm: dict = Depends(require_role("manager")),
-) -> dict[str, Any]:
-    """
-    Create a new invitation.
-
-    Requires: Manager role or higher
-    """
-    try:
-        service = InvitationService()
-        invitation = service.create_invitation(
-            org_id=org_id,
-            email=request.email,
-            role=request.role,
-            invited_by=user_id,
-            team_id=request.team_id,
-            department_id=request.department_id,
-            personal_message=request.personal_message,
-        )
-
-        return {
-            "message": "Invitation created successfully",
-            "invitation": invitation,
-        }
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to create invitation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── List Invitations ─────────────────────────────────────────────
-
-@router.get("/{org_id}")
-async def list_invitations(
-    org_id: str,
-    status: str | None = None,
-    perm: dict = Depends(require_role("manager")),
-) -> list[dict[str, Any]]:
-    """
-    List invitations for an organization.
-
-    Requires: Manager role or higher
-    """
-    try:
-        service = InvitationService()
-        invitations = service.list_invitations(org_id, status=status)
-        return invitations
-
-    except Exception as e:
-        logger.error(f"Failed to list invitations: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
+# ── SPECIFIC ROUTES FIRST (to avoid collision with generic routes) ──
 
 # ── Get Invitation by Token ──────────────────────────────────────
 
@@ -162,21 +103,119 @@ async def accept_invitation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── GENERIC ROUTES (must come after specific routes) ────────────
+
+# ── Create Invitation ────────────────────────────────────────────
+
+@router.post("/{org_id}")
+async def create_invitation(
+    org_id: str,
+    request: CreateInvitationRequest,
+    user_id: str = Depends(get_current_user_id),
+    perm: dict = Depends(require_role("manager")),
+) -> dict[str, Any]:
+    """
+    Create a new invitation.
+
+    Requires: Manager role or higher
+    """
+    try:
+        service = InvitationService()
+        invitation = service.create_invitation(
+            org_id=org_id,
+            email=request.email,
+            role=request.role,
+            invited_by=user_id,
+            team_id=request.team_id,
+            department_id=request.department_id,
+            personal_message=request.personal_message,
+        )
+
+        return {
+            "message": "Invitation created successfully",
+            "invitation": invitation,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to create invitation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── List Invitations ─────────────────────────────────────────────
+
+@router.get("/{org_id}")
+async def list_invitations(
+    org_id: str,
+    status: str | None = None,
+    perm: dict = Depends(require_role("member")),
+) -> list[dict[str, Any]]:
+    """
+    List invitations for an organization.
+
+    Requires: Manager role or higher
+    """
+    try:
+        service = InvitationService()
+        invitations = service.list_invitations(org_id, status=status)
+        return invitations
+
+    except Exception as e:
+        logger.error(f"Failed to list invitations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Revoke Invitation ────────────────────────────────────────────
 
 @router.delete("/{invitation_id}")
 async def revoke_invitation(
     invitation_id: str,
     user_id: str = Depends(get_current_user_id),
-    perm: dict = Depends(require_role("manager")),
 ) -> dict[str, str]:
     """
     Revoke a pending invitation.
 
-    Requires: Manager role or higher
+    Requires: Member role or higher in the organization
     """
     try:
         service = InvitationService()
+
+        # Fetch invitation to get org_id for permission check
+        invitation = service.get_invitation_by_id(invitation_id)
+
+        if not invitation:
+            raise HTTPException(
+                status_code=404,
+                detail="Invitation not found",
+            )
+
+        # Check if user has member role in the organization
+        from ..services.role_service import RoleService
+        role_service = RoleService()
+
+        try:
+            org_id = invitation["org_id"]
+            effective_role = role_service.get_effective_role(user_id, org_id=org_id)
+
+            # Check if user has at least member role
+            role_levels = {"owner": 4, "manager": 3, "member": 2, "viewer": 1}
+            user_level = role_levels.get(effective_role, 0)
+            required_level = role_levels.get("member", 2)
+
+            if user_level < required_level:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Requires member role or higher. Current role: {effective_role}",
+                )
+        except Exception as e:
+            logger.error(f"Permission check failed: {e}")
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient permissions to revoke invitation",
+            )
+
+        # Now revoke the invitation
         success = service.revoke_invitation(invitation_id, revoked_by=user_id)
 
         if not success:

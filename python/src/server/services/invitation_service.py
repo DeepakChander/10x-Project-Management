@@ -74,8 +74,10 @@ class InvitationService:
             # Generate secure token
             invite_token = secrets.token_urlsafe(32)
 
-            # Create invite link (will be replaced with actual domain in production)
-            invite_link = f"http://localhost:3737/invite/{invite_token}"
+            # Create invite link using configured base URL
+            import os
+            base_url = os.getenv("APP_BASE_URL", "http://localhost:3737")
+            invite_link = f"{base_url}/invite/{invite_token}"
 
             # Calculate expiration (7 days)
             expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
@@ -149,6 +151,25 @@ class InvitationService:
             logger.error(f"Failed to get invitation by token: {e}", exc_info=True)
             return None
 
+    def get_invitation_by_id(self, invitation_id: str) -> Optional[dict]:
+        """Get invitation by ID (for permission checking and revocation)"""
+        try:
+            response = (
+                self.client.table("archon_invitations")
+                .select("*")
+                .eq("id", invitation_id)
+                .execute()
+            )
+
+            if not response.data:
+                return None
+
+            return response.data[0]
+
+        except Exception as e:
+            logger.error(f"Failed to get invitation by ID: {e}", exc_info=True)
+            return None
+
     def accept_invitation(
         self,
         token: str,
@@ -184,10 +205,11 @@ class InvitationService:
                 "status": "active",
             }
 
-            # Hash password if provided
+            # Hash password if provided using secure bcrypt
             if password:
-                import hashlib
-                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                from .auth_service import AuthService
+                auth_service = AuthService(self.client)
+                password_hash = auth_service.hash_password(password)
                 user_data["password_hash"] = password_hash
 
             user_response = self.client.table("archon_users_profile").insert(user_data).execute()

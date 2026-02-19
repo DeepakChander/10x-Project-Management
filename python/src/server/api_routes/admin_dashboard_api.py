@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     user_id: str = Depends(get_current_user_id),
-    # No role requirement - any authenticated user can see their org stats
+    perm: dict = Depends(require_role("admin")),
 ):
     """Get admin dashboard statistics. Requires: Admin role."""
     try:
@@ -29,10 +29,24 @@ async def get_dashboard_stats(
 
         org_id = org_response.data[0]["org_id"]
 
-        # Get stats
+        # Get user's project IDs (for org-scoped project and task counts)
+        project_memberships = client.table("archon_project_memberships").select("project_id").eq("user_id", user_id).execute()
+        user_project_ids = [pm["project_id"] for pm in (project_memberships.data or [])]
+
+        # Get stats (org-scoped)
         members_response = client.table("archon_org_memberships").select("*").eq("org_id", org_id).eq("status", "active").execute()
-        projects_response = client.table("archon_projects").select("id").execute()
-        tasks_response = client.table("archon_tasks").select("id, status").execute()
+
+        # Projects: filter by user's project memberships
+        if user_project_ids:
+            projects_response = client.table("archon_projects").select("id").in_("id", user_project_ids).execute()
+            # Tasks: filter by projects user has access to
+            tasks_response = client.table("archon_tasks").select("id, status").in_("project_id", user_project_ids).execute()
+        else:
+            projects_response = client.table("archon_projects").select("id").execute()  # Return empty
+            projects_response.data = []
+            tasks_response = client.table("archon_tasks").select("id, status").execute()
+            tasks_response.data = []
+
         sprints_response = client.table("archon_sprints").select("id, status").execute()
         invitations_response = client.table("archon_invitations").select("id").eq("org_id", org_id).eq("status", "pending").execute()
 
@@ -49,13 +63,14 @@ async def get_dashboard_stats(
             role_counts[role] = role_counts.get(role, 0) + 1
 
         # Calculate task breakdown
-        task_counts = {"todo": 0, "doing": 0, "review": 0, "done": 0}
+        task_counts = {"backlog": 0, "todo": 0, "doing": 0, "review": 0, "done": 0}
         for task in tasks:
-            status = task.get("status", "todo")
+            status = task.get("status", "backlog")
             if status in task_counts:
                 task_counts[status] += 1
-            elif status == "backlog":
-                task_counts["todo"] += 1
+            else:
+                # Unknown status, count as backlog
+                task_counts["backlog"] += 1
 
         return {
             "members": {
@@ -86,7 +101,7 @@ async def get_dashboard_stats(
 @router.get("/team/members")
 async def get_team_members(
     user_id: str = Depends(get_current_user_id),
-    # No role requirement - show team to all org members
+    perm: dict = Depends(require_role("admin")),
 ):
     """Get all team members for organization. Requires: Admin role."""
     try:

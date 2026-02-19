@@ -413,8 +413,9 @@ class KnowledgeItemService:
             if pages_response.data:
                 return pages_response.data[0].get("url", f"source://{source_id}")
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to fetch source URL for {source_id}: {e}")
+            # Fall through to default source URL
 
         return f"source://{source_id}"
 

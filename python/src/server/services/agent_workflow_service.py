@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ..utils import get_supabase_client
+from .projects.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class AgentWorkflowService:
             logger.error(f"Failed to acknowledge task: {e}", exc_info=True)
             raise
 
-    def accept_task(
+    async def accept_task(
         self,
         task_id: str,
         agent_id: str,
@@ -90,11 +91,12 @@ class AgentWorkflowService:
 
             self.client.table("archon_task_acknowledgements").insert(ack_data).execute()
 
-            # Move task to "doing"
-            self.client.table("archon_tasks").update({
-                "status": "doing",
-                "started_at": datetime.now(timezone.utc).isoformat(),
-            }).eq("id", task_id).execute()
+            # Move task to "doing" using TaskService to enforce validation
+            task_service = TaskService(self.client)
+            success, result = await task_service.update_task(task_id, {"status": "doing"})
+
+            if not success:
+                raise Exception(f"Failed to update task status: {result.get('error', 'Unknown error')}")
 
             logger.info(f"Task accepted by agent | task={task_id} | agent={agent_id}")
 
@@ -145,7 +147,7 @@ class AgentWorkflowService:
             logger.error(f"Failed to decline task: {e}", exc_info=True)
             raise
 
-    def submit_for_review(
+    async def submit_for_review(
         self,
         task_id: str,
         agent_id: str,
@@ -181,10 +183,12 @@ class AgentWorkflowService:
 
             self.client.table("archon_task_acknowledgements").insert(ack_data).execute()
 
-            # Move task to "review" status
-            self.client.table("archon_tasks").update({
-                "status": "review",
-            }).eq("id", task_id).execute()
+            # Move task to "review" status using TaskService to enforce validation
+            task_service = TaskService(self.client)
+            success, result = await task_service.update_task(task_id, {"status": "review"})
+
+            if not success:
+                raise Exception(f"Failed to update task status: {result.get('error', 'Unknown error')}")
 
             # TODO: Notify supervisor for review
 
@@ -199,7 +203,7 @@ class AgentWorkflowService:
             logger.error(f"Failed to submit for review: {e}", exc_info=True)
             raise
 
-    def approve_agent_work(
+    async def approve_agent_work(
         self,
         task_id: str,
         reviewer_id: str,
@@ -233,11 +237,12 @@ class AgentWorkflowService:
 
             self.client.table("archon_agent_task_reviews").insert(review_data).execute()
 
-            # Move task to "done"
-            self.client.table("archon_tasks").update({
-                "status": "done",
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-            }).eq("id", task_id).execute()
+            # Move task to "done" using TaskService to enforce validation
+            task_service = TaskService(self.client)
+            success, result = await task_service.update_task(task_id, {"status": "done"})
+
+            if not success:
+                raise Exception(f"Failed to update task status: {result.get('error', 'Unknown error')}")
 
             logger.info(f"Agent work approved | task={task_id} | reviewer={reviewer_id} | score={quality_score}")
 

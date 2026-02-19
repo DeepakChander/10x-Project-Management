@@ -10,6 +10,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+import bcrypt
+
 from ..utils import get_supabase_client
 
 logger = logging.getLogger(__name__)
@@ -22,12 +24,18 @@ class AuthService:
         self.client = supabase_client or get_supabase_client()
 
     def hash_password(self, password: str) -> str:
-        """Hash password using SHA-256 (simple for MVP)"""
-        return hashlib.sha256(password.encode()).hexdigest()
+        """Hash password using bcrypt with salt"""
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
 
     def verify_password(self, password: str, password_hash: str) -> bool:
-        """Verify password against hash"""
-        return self.hash_password(password) == password_hash
+        """Verify password against bcrypt hash"""
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+        except Exception as e:
+            logger.error(f"Password verification failed: {e}")
+            return False
 
     def register_user(
         self,
@@ -41,6 +49,11 @@ class AuthService:
 
         If org_name provided, creates organization and makes user owner.
         """
+        user_id = None
+        org_id = None
+        dept_id = None
+        team_id = None
+
         try:
             # Check if user exists
             existing = (
@@ -71,6 +84,7 @@ class AuthService:
                 raise Exception("Failed to create user")
 
             user = user_response.data[0]
+            user_id = user["id"]
 
             # If org_name provided, create organization with default structure
             if org_name:
@@ -82,49 +96,61 @@ class AuthService:
 
                 org_response = self.client.table("archon_organizations").insert(org_data).execute()
 
-                if org_response.data:
-                    org = org_response.data[0]
+                if not org_response.data:
+                    raise Exception("Failed to create organization")
 
-                    # Create default department
-                    dept_response = self.client.table("archon_departments").insert({
-                        "org_id": org["id"],
-                        "name": "General",
-                        "head_id": user["id"],
-                    }).execute()
+                org = org_response.data[0]
+                org_id = org["id"]
 
-                    dept = dept_response.data[0] if dept_response.data else None
+                # Create default department
+                dept_response = self.client.table("archon_departments").insert({
+                    "org_id": org["id"],
+                    "name": "General",
+                    "head_id": user["id"],
+                }).execute()
 
-                    # Create default team
-                    team = None
-                    if dept:
-                        team_response = self.client.table("archon_teams").insert({
-                            "dept_id": dept["id"],
-                            "name": "General",
-                            "lead_id": user["id"],
-                        }).execute()
-                        team = team_response.data[0] if team_response.data else None
+                if not dept_response.data:
+                    raise Exception("Failed to create department")
 
-                    # Add user as owner member with team assignment
-                    self.client.table("archon_org_memberships").insert({
-                        "user_id": user["id"],
-                        "org_id": org["id"],
-                        "org_role": "owner",
-                        "status": "active",
-                        "team_id": team["id"] if team else None,
-                    }).execute()
+                dept = dept_response.data[0]
+                dept_id = dept["id"]
 
-                    logger.info(
-                        f"User registered with org structure | user={user['id']} | "
-                        f"org={org['id']} | dept={dept['id'] if dept else 'none'} | "
-                        f"team={team['id'] if team else 'none'}"
-                    )
+                # Create default team
+                team_response = self.client.table("archon_teams").insert({
+                    "department_id": dept["id"],
+                    "name": "General",
+                    "lead_id": user["id"],
+                }).execute()
 
-                    return {
-                        "user": user,
-                        "organization": org,
-                        "department": dept,
-                        "team": team,
-                    }
+                if not team_response.data:
+                    raise Exception("Failed to create team")
+
+                team = team_response.data[0]
+                team_id = team["id"]
+
+                # Add user as owner member with team assignment
+                membership_response = self.client.table("archon_org_memberships").insert({
+                    "user_id": user["id"],
+                    "org_id": org["id"],
+                    "org_role": "owner",
+                    "status": "active",
+                    "team_id": team["id"],
+                }).execute()
+
+                if not membership_response.data:
+                    raise Exception("Failed to create organization membership")
+
+                logger.info(
+                    f"User registered with org structure | user={user['id']} | "
+                    f"org={org['id']} | dept={dept['id']} | team={team['id']}"
+                )
+
+                return {
+                    "user": user,
+                    "organization": org,
+                    "department": dept,
+                    "team": team,
+                }
 
             logger.info(f"User registered | user={user['id']}")
             return {"user": user, "organization": None}
@@ -133,7 +159,29 @@ class AuthService:
             logger.warning(f"Registration failed: {e}")
             raise
         except Exception as e:
-            logger.error(f"Failed to register user: {e}", exc_info=True)
+            logger.error(f"Failed to register user: {e} | Rolling back...", exc_info=True)
+
+            # Rollback: delete created records in reverse order
+            try:
+                if team_id:
+                    self.client.table("archon_teams").delete().eq("id", team_id).execute()
+                    logger.info(f"Rolled back team creation | team_id={team_id}")
+
+                if dept_id:
+                    self.client.table("archon_departments").delete().eq("id", dept_id).execute()
+                    logger.info(f"Rolled back department creation | dept_id={dept_id}")
+
+                if org_id:
+                    self.client.table("archon_organizations").delete().eq("id", org_id).execute()
+                    logger.info(f"Rolled back organization creation | org_id={org_id}")
+
+                if user_id:
+                    self.client.table("archon_users_profile").delete().eq("id", user_id).execute()
+                    logger.info(f"Rolled back user creation | user_id={user_id}")
+
+            except Exception as rollback_error:
+                logger.error(f"Rollback failed: {rollback_error}", exc_info=True)
+
             raise
 
     def login(self, email: str, password: str) -> dict[str, Any]:

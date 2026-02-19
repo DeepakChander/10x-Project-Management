@@ -71,8 +71,8 @@ def get_container_status() -> dict[str, Any]:
         if docker_client is not None:
             try:
                 docker_client.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to close Docker client: {e}")
 
 
 @router.get("/status")

@@ -7,7 +7,7 @@
 -- ── Agent Webhook Registration ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS archon_agent_webhooks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    agent_id UUID NOT NULL REFERENCES archon_users_profile(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL,  -- Matches task assignee field (can be UUID, "User", "Archon", etc.)
 
     -- Webhook details
     webhook_url TEXT NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS archon_agent_webhooks (
 CREATE TABLE IF NOT EXISTS archon_task_acknowledgements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id UUID NOT NULL REFERENCES archon_tasks(id) ON DELETE CASCADE,
-    agent_id UUID NOT NULL REFERENCES archon_users_profile(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL,  -- Matches task assignee field (can be UUID, "User", "Archon", etc.)
 
     -- Acknowledgement details
     status TEXT NOT NULL CHECK (status IN ('acknowledged', 'accepted', 'declined', 'submitted_for_review')),
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS archon_task_acknowledgements (
 CREATE TABLE IF NOT EXISTS archon_agent_task_reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id UUID NOT NULL REFERENCES archon_tasks(id) ON DELETE CASCADE,
-    agent_id UUID NOT NULL REFERENCES archon_users_profile(id) ON DELETE CASCADE,
-    reviewer_id UUID NOT NULL REFERENCES archon_users_profile(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL,  -- Matches task assignee field (can be UUID, "User", "Archon", etc.)
+    reviewer_id TEXT NOT NULL,  -- Can be user ID or name
 
     -- Review decision
     decision TEXT NOT NULL CHECK (decision IN ('approved', 'rejected', 'needs_revision')),

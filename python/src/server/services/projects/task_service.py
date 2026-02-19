@@ -6,7 +6,7 @@ shared between MCP tools and FastAPI endpoints.
 """
 
 # Removed direct logging import - using unified config
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from src.server.utils import get_supabase_client
@@ -26,7 +26,19 @@ def _send_notification_safe(notification_func, *args, **kwargs):
     try:
         from ..notification_service import NotificationService
         service = NotificationService()
+
+        # Validate method exists before calling
+        if not hasattr(service, notification_func):
+            logger.error(f"Notification method '{notification_func}' does not exist on NotificationService")
+            return None
+
         method = getattr(service, notification_func)
+
+        # Validate it's callable
+        if not callable(method):
+            logger.error(f"Notification method '{notification_func}' is not callable")
+            return None
+
         return method(*args, **kwargs)
     except Exception as e:
         logger.warning(f"Failed to send notification {notification_func}: {e}")
@@ -127,6 +139,13 @@ class TaskService:
             if not project_id or not isinstance(project_id, str):
                 return False, {"error": "Project ID is required and must be a string"}
 
+            # Validate project_id is a valid UUID
+            try:
+                import uuid
+                uuid.UUID(project_id)
+            except (ValueError, AttributeError):
+                return False, {"error": "Project ID must be a valid UUID"}
+
             # Validate assignee
             is_valid, error_msg = self.validate_assignee(assignee)
             if not is_valid:
@@ -140,6 +159,9 @@ class TaskService:
             task_status = "backlog"
 
             # REORDERING LOGIC: If inserting at a specific position, increment existing tasks
+            # WARNING: Known race condition (BUG-011) - concurrent task creation can cause
+            # duplicate task_order values. Future fix: Use database RPC or fractional indexing.
+            # See: https://github.com/your-repo/issues/BUG-011
             if task_order > 0:
                 # Get all tasks in the same project and status with task_order >= new task's order
                 existing_tasks_response = (
@@ -159,7 +181,7 @@ class TaskService:
                         new_order = existing_task["task_order"] + 1
                         self.supabase_client.table("archon_tasks").update({
                             "task_order": new_order,
-                            "updated_at": datetime.now().isoformat(),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
                         }).eq("id", existing_task["id"]).execute()
 
             task_data = {
@@ -173,8 +195,8 @@ class TaskService:
                 "sources": sources or [],
                 "code_examples": code_examples or [],
                 "created_by": created_by,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
             if feature:
@@ -230,6 +252,7 @@ class TaskService:
         self,
         project_id: str = None,
         status: str = None,
+        assignee: str = None,
         include_closed: bool = False,
         exclude_large_fields: bool = False,
         include_archived: bool = False,
@@ -241,6 +264,7 @@ class TaskService:
         Args:
             project_id: Filter by project
             status: Filter by status
+            assignee: Filter by assignee
             include_closed: Include done tasks
             exclude_large_fields: If True, excludes sources and code_examples fields
             include_archived: If True, includes archived tasks
@@ -284,16 +308,27 @@ class TaskService:
                 query = query.neq("status", "done")
                 filters_applied.append("exclude done tasks")
 
+            if assignee:
+                query = query.eq("assignee", assignee)
+                filters_applied.append(f"assignee={assignee}")
+
             # Apply keyword search if provided
             if search_query:
+                # Sanitize search query to prevent PostgREST filter injection
+                # Escape special characters that could manipulate the filter expression
+                def sanitize_search_term(term: str) -> str:
+                    """Escape PostgREST filter special characters"""
+                    # Escape commas, dots, and percent signs that could break filter syntax
+                    return term.replace(",", "\\,").replace(".", "\\.").replace("%", "\\%")
+
                 # Split search query into terms
                 search_terms = search_query.lower().split()
-                
+
                 # Build the filter expression for AND-of-ORs
                 # Each term must match in at least one field (OR), and all terms must match (AND)
                 if len(search_terms) == 1:
                     # Single term: simple OR across fields
-                    term = search_terms[0]
+                    term = sanitize_search_term(search_terms[0])
                     query = query.or_(
                         f"title.ilike.%{term}%,"
                         f"description.ilike.%{term}%,"
@@ -303,7 +338,7 @@ class TaskService:
                     # Multiple terms: use text search for proper AND logic
                     # Note: This requires full-text search columns to be set up in the database
                     # For now, we'll search for the full phrase in any field
-                    full_query = search_query.lower()
+                    full_query = sanitize_search_term(search_query.lower())
                     query = query.or_(
                         f"title.ilike.%{full_query}%,"
                         f"description.ilike.%{full_query}%,"
@@ -458,7 +493,7 @@ class TaskService:
             old_task = old_task_response.data[0]
 
             # Build update data
-            update_data = {"updated_at": datetime.now().isoformat()}
+            update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
 
             # Validate and add fields
             if "title" in update_fields:
@@ -499,11 +534,11 @@ class TaskService:
                             }
 
                         # Auto-set started_at when transitioning to "doing"
-                        update_data["started_at"] = datetime.now().isoformat()
+                        update_data["started_at"] = datetime.now(timezone.utc).isoformat()
 
                     # Auto-set completed_at when transitioning to "done"
                     if update_fields["status"] == "done" and current_status != "done":
-                        update_data["completed_at"] = datetime.now().isoformat()
+                        update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
                 update_data["status"] = update_fields["status"]
 
@@ -606,9 +641,9 @@ class TaskService:
             # Archive the task
             archive_data = {
                 "archived": True,
-                "archived_at": datetime.now().isoformat(),
+                "archived_at": datetime.now(timezone.utc).isoformat(),
                 "archived_by": archived_by,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
             # Archive the main task

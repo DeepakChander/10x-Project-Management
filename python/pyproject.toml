@@ -43,6 +43,8 @@ server = [
     # Database and storage
     "supabase==2.15.1",
     "asyncpg>=0.29.0",
+    # Security
+    "bcrypt>=4.0.0",
     # AI/ML libraries
     "openai==1.71.0",
     # Document processing

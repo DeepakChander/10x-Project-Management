@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Base validation schemas
-export const DatabaseTaskStatusSchema = z.enum(["todo", "doing", "review", "done"]);
+export const DatabaseTaskStatusSchema = z.enum(["backlog", "todo", "doing", "review", "done"]);
 export const TaskPrioritySchema = z.enum(["low", "medium", "high", "critical"]);
 
 // Assignee schema - flexible string for any agent name
@@ -16,7 +16,7 @@ export const CreateTaskSchema = z.object({
   parent_task_id: z.string().uuid("Parent task ID must be a valid UUID").optional(),
   title: z.string().min(1, "Task title is required").max(255, "Task title must be less than 255 characters"),
   description: z.string().max(10000, "Task description must be less than 10000 characters").default(""),
-  status: DatabaseTaskStatusSchema.default("todo"),
+  status: DatabaseTaskStatusSchema.default("backlog"),
   assignee: AssigneeSchema.default("User"),
   task_order: z.number().int().min(0).default(0),
   feature: z.string().max(100, "Feature name must be less than 100 characters").optional(),

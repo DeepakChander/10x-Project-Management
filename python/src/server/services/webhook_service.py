@@ -6,7 +6,9 @@ Sends webhooks to registered AI agents
 
 import hashlib
 import hmac
+import json
 import logging
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -96,7 +98,8 @@ class WebhookService:
 
             # Add signature for verification
             if webhook_secret:
-                payload_str = str(payload)
+                # Use JSON serialization for deterministic HMAC signing
+                payload_str = json.dumps(payload, sort_keys=True)
                 signature = hmac.new(
                     webhook_secret.encode(),
                     payload_str.encode(),
@@ -135,9 +138,18 @@ class WebhookService:
                 "error_message": str(e),
             }).execute()
 
-            # Increment failed count
-            self.client.table("archon_agent_webhooks").update({
-                "failed_deliveries": webhook["failed_deliveries"] + 1
-            }).eq("id", webhook_id).execute()
+            # Increment failed count - fetch current value first
+            webhook_response = (
+                self.client.table("archon_agent_webhooks")
+                .select("failed_deliveries")
+                .eq("id", webhook_id)
+                .execute()
+            )
+
+            if webhook_response.data:
+                current_failed = webhook_response.data[0].get("failed_deliveries", 0) or 0
+                self.client.table("archon_agent_webhooks").update({
+                    "failed_deliveries": current_failed + 1
+                }).eq("id", webhook_id).execute()
 
             logger.error(f"Webhook delivery failed | url={webhook_url} | error={e}")

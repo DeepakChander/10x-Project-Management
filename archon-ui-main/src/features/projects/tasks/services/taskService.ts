@@ -153,19 +153,6 @@ export const taskService = {
     }
   },
 
-  /**
-   * Get tasks by status across all projects
-   */
-  async getTasksByStatus(status: DatabaseTaskStatus): Promise<Task[]> {
-    try {
-      // Note: This method requires cross-project access
-      // For now, we'll throw an error suggesting to use project-scoped queries
-      throw new Error("getTasksByStatus requires cross-project access. Use getTasksByProject instead.");
-    } catch (error) {
-      console.error(`Failed to get tasks by status ${status}:`, error);
-      throw error;
-    }
-  },
 
   /**
    * Get task counts for all projects in a single batch request

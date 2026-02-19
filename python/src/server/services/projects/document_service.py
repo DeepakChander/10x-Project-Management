@@ -39,6 +39,10 @@ class DocumentService:
 
         Returns:
             Tuple of (success, result_dict)
+
+        WARNING: Known concurrency issue (BUG-014) - concurrent document edits
+        use fetch-modify-write pattern without locking, causing last-write-wins.
+        Future fix: Use PostgreSQL jsonb_set with WHERE conditions or versioning.
         """
         try:
             # Get current project

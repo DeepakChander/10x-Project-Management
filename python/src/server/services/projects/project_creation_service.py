@@ -29,6 +29,7 @@ class ProjectCreationService:
         title: str,
         description: str | None = None,
         github_repo: str | None = None,
+        created_by: str | None = None,
         **kwargs,
     ) -> tuple[bool, dict[str, Any]]:
         """
@@ -76,6 +77,24 @@ class ProjectCreationService:
 
             project_id = response.data[0]["id"]
             logger.info(f"Created project {project_id} in database")
+
+            # Auto-create project membership for creator
+            if created_by:
+                try:
+                    membership_data = {
+                        "user_id": created_by,
+                        "project_id": project_id,
+                        "project_role": "owner",
+                        "assigned_by": created_by,
+                    }
+                    membership_response = self.supabase_client.table("archon_project_memberships").insert(membership_data).execute()
+                    if membership_response.data:
+                        logger.info(f"Created project membership for user {created_by} on project {project_id}")
+                    else:
+                        logger.warning(f"Failed to create project membership for user {created_by}")
+                except Exception as membership_error:
+                    logger.error(f"Error creating project membership: {membership_error}", exc_info=True)
+                    # Continue even if membership creation fails (non-critical for project creation)
 
             # AI processing step
 

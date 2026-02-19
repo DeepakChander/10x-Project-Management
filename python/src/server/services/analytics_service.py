@@ -278,9 +278,23 @@ class AnalyticsService:
 
             capacity = capacity_response.data[0] if capacity_response.data else {}
 
+            # Calculate actual completed story points from tasks
+            completed_tasks_response = (
+                self.client.table("archon_tasks")
+                .select("story_points")
+                .eq("sprint_id", sprint_id)
+                .eq("status", "done")
+                .execute()
+            )
+
+            # Sum up story points from completed tasks
+            completed_points = sum(
+                task.get("story_points", 0) or 0
+                for task in (completed_tasks_response.data or [])
+            )
+
             # Calculate metrics
             total_points = capacity.get("total_story_points", 0)
-            completed_points = capacity.get("completed_tasks", 0)  # Note: This is tasks, not points
             completion_rate = (completed_points / total_points * 100) if total_points > 0 else 0
 
             # Store in velocity history

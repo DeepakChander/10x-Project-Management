@@ -39,14 +39,21 @@ async def generate_api_key(
             rate_limit=100,
         )
 
-        # Register webhook
-        from ..utils import get_supabase_client
-        client = get_supabase_client()
-        client.table("archon_agent_webhooks").insert({
-            "agent_id": request.agent_user_id,
-            "webhook_url": request.webhook_url,
-            "events": ["task_assigned", "task_updated", "sprint_started"],
-        }).execute()
+        # Register webhook (if this fails, log error but don't fail the key creation)
+        try:
+            from ..utils import get_supabase_client
+            client = get_supabase_client()
+            webhook_response = client.table("archon_agent_webhooks").insert({
+                "agent_id": request.agent_user_id,
+                "webhook_url": request.webhook_url,
+                "events": ["task_assigned", "task_updated", "sprint_started"],
+            }).execute()
+
+            if not webhook_response.data:
+                logger.warning(f"Webhook registration returned no data for agent {request.agent_user_id}")
+        except Exception as webhook_error:
+            logger.error(f"Failed to register webhook (API key created successfully): {webhook_error}")
+            # Continue - API key was created successfully even if webhook failed
 
         return result
 

@@ -262,7 +262,7 @@ Provide estimation in Fibonacci scale (1, 2, 3, 5, 8, 13 story points).
             .select("*")
             .eq("project_id", project_id)
             .in_("status", ["backlog", "todo"])
-            .eq("archived", False)
+            .or_("archived.is.null,archived.is.false")
             .order("priority", desc=True)
             .execute()
         )

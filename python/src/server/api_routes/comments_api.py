@@ -3,6 +3,7 @@ Task Comments API
 """
 
 import logging
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/api/tasks", tags=["comments"])
 
 class CreateCommentRequest(BaseModel):
     comment_text: str
-    mentions: list[str] = []
+    mentions: list[UUID] = []  # Validate as UUIDs for user mentions
 
 
 @router.post("/{task_id}/comments")

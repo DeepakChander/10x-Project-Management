@@ -880,8 +880,8 @@ async def _perform_crawl_with_progress(
             # Ensure clients see the failure
             try:
                 await tracker.error(error_message)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to send error notification to progress tracker: {e}")
         finally:
             # Clean up task from registry when done (success or failure)
             if progress_id in active_crawl_tasks:

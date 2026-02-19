@@ -38,6 +38,7 @@ from ..services.projects.versioning_service import VersioningService
 # Permission middleware imports
 from fastapi import Depends
 from ..middleware.permission_middleware import (
+    get_current_user_id,
     require_permission,
     require_task_permission,
     require_human_only,
@@ -76,7 +77,7 @@ class CreateTaskRequest(BaseModel):
     project_id: str
     title: str
     description: str | None = None
-    status: str | None = "backlog"
+    # Note: status is always "backlog" on creation (cannot be set via API)
     assignee: str | None = "User"
     task_order: int | None = 0
     priority: str | None = "medium"
@@ -91,11 +92,14 @@ class CreateTaskRequest(BaseModel):
 async def list_projects(
     response: Response,
     include_content: bool = True,
-    if_none_match: str | None = Header(None)
+    if_none_match: str | None = Header(None),
+    perm: dict = Depends(require_permission("project", "read")),
 ):
     """
     List all projects.
-    
+
+    Requires: project:read permission
+
     Args:
         include_content: If True (default), returns full project content.
                         If False, returns lightweight metadata with statistics.
@@ -146,7 +150,7 @@ async def list_projects(
         # Generate response with timestamp for polling
         response_data = {
             "projects": formatted_projects,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "count": len(formatted_projects)
         }
 
@@ -159,7 +163,7 @@ async def list_projects(
 
         # Set headers
         response.headers["ETag"] = current_etag
-        response.headers["Last-Modified"] = datetime.utcnow().isoformat()
+        response.headers["Last-Modified"] = datetime.now(timezone.utc).isoformat()
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
 
         return response_data
@@ -172,7 +176,10 @@ async def list_projects(
 
 
 @router.post("/projects")
-async def create_project(request: CreateProjectRequest):
+async def create_project(
+    request: CreateProjectRequest,
+    perm: dict = Depends(require_permission("project", "create"))
+):
     """Create a new project with streaming progress."""
     # Validate title
     if not request.title:
@@ -182,8 +189,9 @@ async def create_project(request: CreateProjectRequest):
         raise HTTPException(status_code=422, detail="Title cannot be empty")
 
     try:
+        user_id = perm["user_id"]
         logfire.info(
-            f"Creating new project | title={request.title} | github_repo={request.github_repo}"
+            f"Creating new project | title={request.title} | github_repo={request.github_repo} | user_id={user_id}"
         )
 
         # Prepare kwargs for additional project fields
@@ -202,6 +210,7 @@ async def create_project(request: CreateProjectRequest):
             title=request.title,
             description=request.description,
             github_repo=request.github_repo,
+            created_by=user_id,
             **kwargs,
         )
 
@@ -332,7 +341,7 @@ async def get_all_task_counts(
         # Set ETag headers for successful response
         response.headers["ETag"] = current_etag
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
-        response.headers["Last-Modified"] = datetime.utcnow().isoformat()
+        response.headers["Last-Modified"] = datetime.now(timezone.utc).isoformat()
 
         logfire.debug(
             f"Task counts retrieved | project_count={len(result)} | etag={current_etag}"
@@ -348,8 +357,14 @@ async def get_all_task_counts(
 
 
 @router.get("/projects/{project_id}")
-async def get_project(project_id: str):
-    """Get a specific project."""
+async def get_project(
+    project_id: str,
+    perm: dict = Depends(require_permission("project", "read")),
+):
+    """Get a specific project.
+
+    Requires: project:read permission
+    """
     try:
         logfire.info(f"Getting project | project_id={project_id}")
 
@@ -388,8 +403,15 @@ async def get_project(project_id: str):
 
 
 @router.put("/projects/{project_id}")
-async def update_project(project_id: str, request: UpdateProjectRequest):
-    """Update a project with comprehensive Logfire monitoring."""
+async def update_project(
+    project_id: str,
+    request: UpdateProjectRequest,
+    perm: dict = Depends(require_permission("project", "update")),
+):
+    """Update a project with comprehensive Logfire monitoring.
+
+    Requires: project:update permission
+    """
     try:
         supabase_client = get_supabase_client()
 
@@ -499,8 +521,14 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
 
 
 @router.delete("/projects/{project_id}")
-async def delete_project(project_id: str):
-    """Delete a project and all its tasks."""
+async def delete_project(
+    project_id: str,
+    perm: dict = Depends(require_permission("project", "delete")),
+):
+    """Delete a project and all its tasks.
+
+    Requires: project:delete permission
+    """
     try:
         logfire.info(f"Deleting project | project_id={project_id}")
 
@@ -567,6 +595,7 @@ async def list_project_tasks(
     response: Response,
     include_archived: bool = False,
     exclude_large_fields: bool = False,
+    assignee: str = None,
     perm: dict = Depends(require_permission("task", "read"))
 ):
     """List all tasks for a specific project with ETag support for efficient polling.
@@ -578,13 +607,14 @@ async def list_project_tasks(
         if_none_match = request.headers.get("If-None-Match")
 
         logfire.debug(
-            f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields} | etag={if_none_match}"
+            f"Listing project tasks | project_id={project_id} | include_archived={include_archived} | exclude_large_fields={exclude_large_fields} | assignee={assignee} | etag={if_none_match}"
         )
 
         # Use TaskService to list tasks
         task_service = TaskService()
         success, result = task_service.list_tasks(
             project_id=project_id,
+            assignee=assignee,
             include_closed=True,  # Get all tasks, including done
             exclude_large_fields=exclude_large_fields,
             include_archived=include_archived,  # Pass the flag down to service
@@ -1072,8 +1102,14 @@ class CreateDependencyRequest(BaseModel):
 
 
 @router.get("/projects/{project_id}/dependencies")
-async def get_project_dependencies(project_id: str):
-    """Get all task dependencies for a project."""
+async def get_project_dependencies(
+    project_id: str,
+    perm: dict = Depends(require_permission("task", "read")),
+):
+    """Get all task dependencies for a project.
+
+    Requires: task:read permission
+    """
     try:
         from ..services.projects.task_dependency_service import TaskDependencyService
         dep_service = TaskDependencyService()
@@ -1150,8 +1186,14 @@ async def create_task_dependency(
 
 
 @router.delete("/dependencies/{dependency_id}")
-async def delete_dependency(dependency_id: str):
-    """Remove a task dependency."""
+async def delete_dependency(
+    dependency_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Remove a task dependency.
+
+    Requires: Authentication (specific project permission checked via dependency lookup)
+    """
     try:
         from ..services.projects.task_dependency_service import TaskDependencyService
         dep_service = TaskDependencyService()

@@ -9,7 +9,7 @@ import type { TaskPriority } from "./priority";
 export type { TaskPriority };
 
 // Database status enum - using database values directly
-export type DatabaseTaskStatus = "todo" | "doing" | "review" | "done";
+export type DatabaseTaskStatus = "backlog" | "todo" | "doing" | "review" | "done";
 
 // Assignee type - flexible string to support any agent name
 export type Assignee = string;
@@ -20,6 +20,7 @@ export type CommonAssignee = (typeof COMMON_ASSIGNEES)[number];
 
 // Task counts for project overview
 export interface TaskCounts {
+  backlog: number;
   todo: number;
   doing: number;
   review: number;
@@ -47,6 +48,7 @@ export type TaskCodeExample =
 export interface Task {
   id: string;
   project_id: string;
+  parent_task_id?: string | null;
   title: string;
   description: string;
   status: DatabaseTaskStatus;
@@ -68,6 +70,21 @@ export interface Task {
 
   // Sprint field (Phase 2: Sprint Management)
   sprint_id?: string | null;
+
+  // Phase 1.1: Enhanced task lifecycle fields
+  reviewer_id?: string | null;
+  story_points?: number | null;
+  due_date?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_by?: string;
+
+  // Phase 1.3: Time tracking
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
+
+  // Phase 1.4: Task tagging
+  tags?: string[];
 
   // Extended UI properties
   featureColor?: string;
