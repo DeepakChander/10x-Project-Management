@@ -15,6 +15,7 @@ export type {
   Task,
   TaskCodeExample,
   TaskCounts,
+  TaskDependency,
   TaskPriority,
   TaskSource,
   UpdateTaskRequest,

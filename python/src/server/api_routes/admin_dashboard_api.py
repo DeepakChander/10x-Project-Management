@@ -101,25 +101,35 @@ async def get_dashboard_stats(
 @router.get("/team/members")
 async def get_team_members(
     user_id: str = Depends(get_current_user_id),
-    perm: dict = Depends(require_role("admin")),
 ):
-    """Get all team members for organization. Requires: Admin role."""
+    """Get all team members. Falls back to all users when no org is configured."""
     try:
         client = get_supabase_client()
 
-        # Get user's org
+        # Check if user has an org membership
         org_response = client.table("archon_org_memberships").select("org_id").eq("user_id", user_id).execute()
-        if not org_response.data:
-            raise HTTPException(status_code=404, detail="User not in any organization")
 
-        org_id = org_response.data[0]["org_id"]
-
-        # Get all members
-        members_response = client.table("archon_org_memberships").select(
-            "*, archon_users_profile!archon_org_memberships_user_id_fkey(*)"
-        ).eq("org_id", org_id).execute()
-
-        return members_response.data or []
+        if org_response.data:
+            # Return org-scoped members with profile info
+            org_id = org_response.data[0]["org_id"]
+            members_response = client.table("archon_org_memberships").select(
+                "*, archon_users_profile!archon_org_memberships_user_id_fkey(*)"
+            ).eq("org_id", org_id).execute()
+            return members_response.data or []
+        else:
+            # No org configured — return all users in archon_users_profile
+            # This handles local/beta deployments where org memberships haven't been set up
+            users_response = client.table("archon_users_profile").select("*").execute()
+            # Wrap in the same shape as the org membership response so the UI works
+            return [
+                {
+                    "user_id": u["id"],
+                    "org_role": "owner",
+                    "status": u.get("status", "active"),
+                    "archon_users_profile": u,
+                }
+                for u in (users_response.data or [])
+            ]
 
     except HTTPException:
         raise

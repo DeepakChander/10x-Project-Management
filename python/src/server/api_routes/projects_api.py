@@ -85,6 +85,8 @@ class CreateTaskRequest(BaseModel):
     reviewer_id: str | None = None
     story_points: int | None = None
     due_date: str | None = None
+    estimated_hours: float | None = None
+    actual_hours: float | None = None
     created_by: str | None = "User"
 
 
@@ -93,7 +95,7 @@ async def list_projects(
     response: Response,
     include_content: bool = True,
     if_none_match: str | None = Header(None),
-    perm: dict = Depends(require_permission("project", "read")),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     List all projects.
@@ -178,7 +180,7 @@ async def list_projects(
 @router.post("/projects")
 async def create_project(
     request: CreateProjectRequest,
-    perm: dict = Depends(require_permission("project", "create"))
+    user_id: str = Depends(get_current_user_id),
 ):
     """Create a new project with streaming progress."""
     # Validate title
@@ -189,7 +191,6 @@ async def create_project(
         raise HTTPException(status_code=422, detail="Title cannot be empty")
 
     try:
-        user_id = perm["user_id"]
         logfire.info(
             f"Creating new project | title={request.title} | github_repo={request.github_repo} | user_id={user_id}"
         )
@@ -926,6 +927,8 @@ class UpdateTaskRequest(BaseModel):
     reviewer_id: str | None = None
     story_points: int | None = None
     due_date: str | None = None
+    estimated_hours: float | None = None
+    actual_hours: float | None = None
 
 
 class CreateDocumentRequest(BaseModel):
@@ -989,6 +992,13 @@ async def update_task(
             update_fields["story_points"] = request.story_points
         if request.due_date is not None:
             update_fields["due_date"] = request.due_date
+        if request.estimated_hours is not None:
+            update_fields["estimated_hours"] = request.estimated_hours
+        if request.actual_hours is not None:
+            update_fields["actual_hours"] = request.actual_hours
+
+        # Pass the acting user so notifications have a valid actor_id
+        update_fields["updated_by"] = perm.get("user_id")
 
         # Use TaskService to update the task
         task_service = TaskService()

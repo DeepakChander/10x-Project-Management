@@ -27,6 +27,11 @@ export const CreateTaskSchema = z.object({
   priority: TaskPrioritySchema.default("medium"),
   sources: z.array(z.any()).default([]),
   code_examples: z.array(z.any()).default([]),
+  story_points: z.number().int().min(0).max(100).nullable().optional(),
+  due_date: z.string().nullable().optional(),
+  reviewer_id: z.string().nullable().optional(),
+  estimated_hours: z.number().min(0).nullable().optional(),
+  actual_hours: z.number().min(0).nullable().optional(),
 });
 
 export const UpdateTaskSchema = CreateTaskSchema.partial().omit({

@@ -133,7 +133,7 @@ async def create_credential(request: CredentialRequest):
 # The frontend can check the 'is_default' flag to know if it's a default or user-set value
 OPTIONAL_SETTINGS_WITH_DEFAULTS = {
     "DISCONNECT_SCREEN_ENABLED": "true",  # Show disconnect screen when server is unavailable
-    "PROJECTS_ENABLED": "false",  # Enable project management features
+    "PROJECTS_ENABLED": "true",  # Enable project management features
     "LOGFIRE_ENABLED": "false",  # Enable Pydantic Logfire integration
 }
 

@@ -533,6 +533,24 @@ class TaskService:
                                          f"{', '.join(blocker_titles)}{suffix}"
                             }
 
+                        # Enforce WIP limit: max 3 tasks in "doing" per assignee
+                        task_assignee = update_fields.get("assignee") or old_task.get("assignee")
+                        if task_assignee and task_assignee not in ("User", "", None):
+                            wip_response = (
+                                self.supabase_client.table("archon_tasks")
+                                .select("id", count="exact")
+                                .eq("assignee", task_assignee)
+                                .eq("status", "doing")
+                                .neq("id", task_id)
+                                .execute()
+                            )
+                            wip_count = wip_response.count or 0
+                            if wip_count >= 3:
+                                return False, {
+                                    "error": f"WIP limit reached: '{task_assignee}' already has {wip_count} task(s) in progress. "
+                                             "Complete or move a task before starting another."
+                                }
+
                         # Auto-set started_at when transitioning to "doing"
                         update_data["started_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -569,6 +587,12 @@ class TaskService:
             if "due_date" in update_fields:
                 update_data["due_date"] = update_fields["due_date"]
 
+            if "estimated_hours" in update_fields:
+                update_data["estimated_hours"] = update_fields["estimated_hours"]
+
+            if "actual_hours" in update_fields:
+                update_data["actual_hours"] = update_fields["actual_hours"]
+
             # Update task
             response = (
                 self.supabase_client.table("archon_tasks")
@@ -583,8 +607,31 @@ class TaskService:
                 # Send notifications based on what changed
                 actor_id = update_fields.get("updated_by", "system")
 
-                # Notify on status change
+                # Notify on status change + record status history
                 if "status" in update_fields and old_task["status"] != task["status"]:
+                    # Record status transition in history table
+                    import uuid as _uuid_mod
+                    def _is_valid_uuid(v):
+                        try:
+                            _uuid_mod.UUID(str(v))
+                            return True
+                        except Exception:
+                            return False
+
+                    try:
+                        # Columns match COMPLETE_DATABASE_SETUP_PRODUCTION.sql schema:
+                        # old_status / new_status / user_id (NOT NULL — use system UUID as fallback)
+                        SYSTEM_UUID = "00000000-0000-0000-0000-000000000001"
+                        history_data = {
+                            "task_id": task_id,
+                            "old_status": old_task["status"],
+                            "new_status": task["status"],
+                            "user_id": actor_id if _is_valid_uuid(actor_id) else SYSTEM_UUID,
+                        }
+                        self.supabase_client.table("archon_task_status_history").insert(history_data).execute()
+                    except Exception as hist_err:
+                        logger.warning(f"Failed to record status history for task {task_id}: {hist_err}")
+
                     if task["assignee"] and task["assignee"] != "User":
                         _send_notification_safe(
                             "notify_task_status_changed",

@@ -170,15 +170,18 @@ class AnalyticsService:
 
             active_sprint = active_sprint_response.data[0] if active_sprint_response.data else None
 
-            # Get velocity summary
-            velocity_response = (
-                self.client.table("project_velocity_summary")
-                .select("*")
-                .eq("project_id", project_id)
-                .execute()
-            )
-
-            velocity_summary = velocity_response.data[0] if velocity_response.data else None
+            # Get velocity summary from view (falls back to None if view not yet created)
+            velocity_summary = None
+            try:
+                velocity_response = (
+                    self.client.table("project_velocity_summary")
+                    .select("*")
+                    .eq("project_id", project_id)
+                    .execute()
+                )
+                velocity_summary = velocity_response.data[0] if velocity_response.data else None
+            except Exception as e:
+                logger.warning(f"project_velocity_summary view unavailable (run migration 030): {e}")
 
             # Get burndown if active sprint
             burndown = None

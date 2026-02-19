@@ -24,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # Import our PydanticAI agents
+from .coding_agent import CodingAgent
 from .document_agent import DocumentAgent
 from .rag_agent import RagAgent
 
@@ -51,8 +52,19 @@ class AgentResponse(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class ExecuteTaskRequest(BaseModel):
+    """Request model for automatic task execution by the task dispatcher."""
+
+    task_id: str
+    title: str
+    description: str = ""
+    project_id: str | None = None
+    assignee: str = "Coding Agent"
+
+
 # Agent registry
 AVAILABLE_AGENTS = {
+    "coding": CodingAgent,
     "document": DocumentAgent,
     "rag": RagAgent,
 }
@@ -191,6 +203,44 @@ async def run_agent(request: AgentRequest):
 
     except Exception as e:
         logger.error(f"Error running {request.agent_type} agent: {e}")
+        return AgentResponse(success=False, error=str(e))
+
+
+@app.post("/agents/execute-task", response_model=AgentResponse)
+async def execute_task(request: ExecuteTaskRequest):
+    """
+    Execute a project task using the coding agent.
+
+    Called automatically by the task dispatcher when a task is assigned
+    to "Coding Agent" or "Archon" in the project management UI.
+    """
+    try:
+        if "coding" not in app.state.agents:
+            return AgentResponse(success=False, error="Coding agent not available — check AI model configuration")
+
+        agent = app.state.agents["coding"]
+
+        from .coding_agent import TaskExecutionDeps
+
+        deps = TaskExecutionDeps(
+            task_id=request.task_id,
+            project_id=request.project_id,
+            assignee=request.assignee,
+        )
+
+        desc_section = f"\n\nDescription:\n{request.description}" if request.description.strip() else ""
+        prompt = f"Task: {request.title}{desc_section}\n\nPlease analyse this task, search for relevant context in the knowledge base if needed, and provide a detailed implementation plan or analysis."
+
+        result = await agent.run(prompt, deps)
+
+        return AgentResponse(
+            success=True,
+            result=result,
+            metadata={"task_id": request.task_id, "agent": "coding", "assignee": request.assignee},
+        )
+
+    except Exception as e:
+        logger.error(f"Task execution failed for {request.task_id}: {e}", exc_info=True)
         return AgentResponse(success=False, error=str(e))
 
 

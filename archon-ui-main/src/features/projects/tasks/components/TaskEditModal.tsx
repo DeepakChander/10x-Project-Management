@@ -21,6 +21,7 @@ import {
 } from "../../../ui/primitives";
 import { useTaskEditor } from "../hooks";
 import { type Assignee, COMMON_ASSIGNEES, type Task, type TaskPriority } from "../types";
+import { DependencySelector } from "./DependencySelector";
 import { FeatureSelect } from "./FeatureSelect";
 
 interface TaskEditModalProps {
@@ -129,6 +130,7 @@ export const TaskEditModal = memo(
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="backlog">Backlog</SelectItem>
                     <SelectItem value="todo">Todo</SelectItem>
                     <SelectItem value="doing">Doing</SelectItem>
                     <SelectItem value="review">Review</SelectItem>
@@ -185,6 +187,90 @@ export const TaskEditModal = memo(
                 />
               </FormField>
             </FormGrid>
+
+            <FormGrid columns={3}>
+              <FormField>
+                <Label>Story Points</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={localTask?.story_points ?? ""}
+                  onChange={(e) =>
+                    setLocalTask((prev) =>
+                      prev ? { ...prev, story_points: e.target.value ? Number(e.target.value) : null } : null,
+                    )
+                  }
+                  placeholder="0–100"
+                />
+              </FormField>
+
+              <FormField>
+                <Label>Est. Hours</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={localTask?.estimated_hours ?? ""}
+                  onChange={(e) =>
+                    setLocalTask((prev) =>
+                      prev ? { ...prev, estimated_hours: e.target.value ? Number(e.target.value) : null } : null,
+                    )
+                  }
+                  placeholder="e.g. 4"
+                />
+              </FormField>
+
+              <FormField>
+                <Label>Actual Hours</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={localTask?.actual_hours ?? ""}
+                  onChange={(e) =>
+                    setLocalTask((prev) =>
+                      prev ? { ...prev, actual_hours: e.target.value ? Number(e.target.value) : null } : null,
+                    )
+                  }
+                  placeholder="e.g. 6"
+                />
+              </FormField>
+            </FormGrid>
+
+            <FormGrid columns={2}>
+              <FormField>
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={localTask?.due_date ? localTask.due_date.split("T")[0] : ""}
+                  onChange={(e) =>
+                    setLocalTask((prev) =>
+                      prev ? { ...prev, due_date: e.target.value || null } : null,
+                    )
+                  }
+                />
+              </FormField>
+
+              <FormField>
+                <Label>Reviewer</Label>
+                <Input
+                  value={localTask?.reviewer_id || ""}
+                  onChange={(e) =>
+                    setLocalTask((prev) =>
+                      prev ? { ...prev, reviewer_id: e.target.value || null } : null,
+                    )
+                  }
+                  placeholder="Reviewer name or ID"
+                />
+              </FormField>
+            </FormGrid>
+
+            {editingTask?.id && (
+              <FormField>
+                <DependencySelector taskId={editingTask.id} projectId={projectId} />
+              </FormField>
+            )}
           </div>
 
           <DialogFooter>

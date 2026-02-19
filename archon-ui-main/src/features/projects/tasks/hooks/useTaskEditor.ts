@@ -39,6 +39,11 @@ export const useTaskEditor = (projectId: string): UseTaskEditorReturn => {
     if (localTask.task_order !== editingTask.task_order) updates.task_order = localTask.task_order;
     if (localTask.priority !== editingTask.priority) updates.priority = localTask.priority;
     if (localTask.feature !== editingTask.feature) updates.feature = localTask.feature || "";
+    if (localTask.story_points !== editingTask.story_points) updates.story_points = localTask.story_points ?? null;
+    if (localTask.due_date !== editingTask.due_date) updates.due_date = localTask.due_date ?? null;
+    if (localTask.reviewer_id !== editingTask.reviewer_id) updates.reviewer_id = localTask.reviewer_id ?? null;
+    if (localTask.estimated_hours !== editingTask.estimated_hours) updates.estimated_hours = localTask.estimated_hours ?? null;
+    if (localTask.actual_hours !== editingTask.actual_hours) updates.actual_hours = localTask.actual_hours ?? null;
 
     return updates;
   }, []);

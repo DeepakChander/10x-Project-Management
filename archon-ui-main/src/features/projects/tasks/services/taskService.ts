@@ -7,7 +7,7 @@ import { callAPIWithETag } from "../../../shared/api/apiClient";
 import { formatZodErrors, ValidationError } from "../../../shared/types/errors";
 
 import { validateCreateTask, validateUpdateTask, validateUpdateTaskStatus } from "../schemas";
-import type { CreateTaskRequest, DatabaseTaskStatus, Task, TaskCounts, UpdateTaskRequest } from "../types";
+import type { CreateTaskRequest, DatabaseTaskStatus, Task, TaskCounts, TaskDependency, UpdateTaskRequest } from "../types";
 
 export const taskService = {
   /**
@@ -164,6 +164,39 @@ export const taskService = {
       return response || {};
     } catch (error) {
       console.error("Failed to get task counts for all projects:", error);
+      throw error;
+    }
+  },
+
+  // ── Dependencies ──────────────────────────────────────────────
+
+  async getTaskDependencies(taskId: string): Promise<{ blocks: TaskDependency[]; blocked_by: TaskDependency[] }> {
+    try {
+      return await callAPIWithETag(`/api/tasks/${taskId}/dependencies`);
+    } catch (error) {
+      console.error(`Failed to get dependencies for task ${taskId}:`, error);
+      throw error;
+    }
+  },
+
+  async addDependency(taskId: string, dependsOnId: string): Promise<TaskDependency> {
+    try {
+      const response = await callAPIWithETag<TaskDependency>(`/api/tasks/${taskId}/dependencies`, {
+        method: "POST",
+        body: JSON.stringify({ depends_on_id: dependsOnId }),
+      });
+      return response;
+    } catch (error) {
+      console.error(`Failed to add dependency for task ${taskId}:`, error);
+      throw error;
+    }
+  },
+
+  async removeDependency(dependencyId: string): Promise<void> {
+    try {
+      await callAPIWithETag<void>(`/api/dependencies/${dependencyId}`, { method: "DELETE" });
+    } catch (error) {
+      console.error(`Failed to remove dependency ${dependencyId}:`, error);
       throw error;
     }
   },

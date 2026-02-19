@@ -11,6 +11,7 @@ Modules:
 - projects_api: Project and task management with streaming
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -125,6 +126,15 @@ async def lifespan(app: FastAPI):
 
         # MCP Client functionality removed from architecture
         # Agents now use MCP tools directly
+
+        # Start the task dispatcher — watches for tasks assigned to AI agents
+        # and automatically dispatches them to the agents service
+        try:
+            from .services.task_dispatcher import start_task_dispatcher
+            asyncio.create_task(start_task_dispatcher())
+            api_logger.info("✅ Task dispatcher started (auto-execute agent-assigned tasks)")
+        except Exception as e:
+            api_logger.warning(f"Could not start task dispatcher: {e}")
 
         # Mark initialization as complete
         _initialization_complete = True

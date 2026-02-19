@@ -1,832 +1,1602 @@
-```# 10x PM - Executive Demo Guide 🎯
+# 10x Project Management — Complete Demo Walkthrough
 
-**Complete walkthrough for demonstrating the system to stakeholders**
-
-Duration: 15-20 minutes
-Audience: Executives, investors, potential customers
-Goal: Show complete workflow from signup to AI-powered sprint management
+**Version:** 4.0 — Full Feature Coverage
+**Duration:** 45–60 minutes (full) | 20–25 minutes (condensed)
+**Audience:** Executives, investors, customers, developers
+**Mode:** Step-by-step — every click, every command, every expected result
 
 ---
 
-## Pre-Demo Setup (5 minutes before)
+## HOW TO USE THIS GUIDE
 
-### 1. Clean Database
+This guide walks through **every feature of the application** in the order a real user would encounter them — from first signup to completed AI-executed sprint. Each scene has three parts:
+
+- **SAY** — what to say to the audience
+- **DO** — exact steps, exact commands, exact MCP prompts
+- **SEE** — what the result looks like
+
+---
+
+## SYSTEM OVERVIEW
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                       10x PROJECT MANAGEMENT                           │
+├───────────────────┬────────────────────┬───────────────────────────────┤
+│  FRONTEND         │  BACKEND           │  AI LAYER                     │
+│  :3737            │  :8181             │                               │
+│                   │                   │  MCP Server :8051             │
+│  React 18         │  FastAPI           │  • 14 tools for AI IDEs       │
+│  TanStack Query   │  Supabase          │  • Claude Code / Cursor /     │
+│  Tailwind CSS     │  114 REST routes   │    Windsurf                   │
+│  5-column Kanban  │  Permissions       │                               │
+│  Sprint Analytics │  Sprint Service    │  Agents Service :8052         │
+│  Notifications    │  Task Dispatcher   │  • Coding Agent (GPT-4o-mini) │
+│  Team Management  │  Analytics         │  • RAG Agent                  │
+└───────────────────┴────────────────────┴───────────────────────────────┘
+                          │
+             PostgreSQL + pgvector (Supabase)
+             41 tables | 3 analytics views | 15+ triggers
+```
+
+---
+
+## TASK LIFECYCLE
+
+```
+  BACKLOG ──► TODO ──► DOING ──► REVIEW ──► DONE
+     │                   │          │
+     │  Agent picks up   │   Agent posts
+     │  from BACKLOG or  │   output, waits
+     │  TODO (every 30s) │   for human approval
+     │                   │
+     └───────────────────┘
+         Both statuses trigger agent dispatch
+
+  Validation rules:
+  ┌────────────────────────────────────────────────────────┐
+  │  backlog  → todo    ✓                                  │
+  │  todo     → doing   ✓ (blocked if unresolved deps)     │
+  │  doing    → review  ✓                                  │
+  │  review   → done    ✓                                  │
+  │  review   → doing   ✓ (send back for rework)           │
+  │  ANY      → backlog ✓ (reset path)                     │
+  │                                                        │
+  │  WIP LIMIT: max 3 tasks in "doing" per person          │
+  │  started_at  auto-stamped when status → doing          │
+  │  completed_at auto-stamped when status → done          │
+  └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## AGENT AUTO-EXECUTION PIPELINE
+
+```
+  User assigns task to "Coding Agent" or "Archon"
+               │
+               ▼  every 30 seconds
+  Task Dispatcher (asyncio background task in 10x-server)
+  ┌─────────────────────────────────────────────────────┐
+  │  SELECT * FROM archon_tasks                         │
+  │  WHERE assignee IN ('Coding Agent', 'Archon')       │
+  │  AND status IN ('backlog', 'todo')                  │
+  │  AND archived = false LIMIT 5                       │
+  └─────────────────────────────────────────────────────┘
+               │ task found
+               ▼
+  Claim task: UPDATE status = 'doing'
+  WHERE id = X AND status = current_status
+  (optimistic lock — prevents double-pickup by concurrent polls)
+               │
+               ▼
+  Post comment: "🤖 Coding Agent has accepted this task and is starting work..."
+  Insert row in archon_task_acknowledgements (status: accepted)
+               │
+               ▼
+  POST http://agents:8052/agents/execute-task
+               │
+               ▼
+  ┌─────────────────────────────────────────────────────┐
+  │  Coding Agent (PydanticAI + GPT-4o-mini)            │
+  │  1. Reads task title + description                  │
+  │  2. Calls search_knowledge_base() tool              │
+  │  3. Generates implementation plan / code / analysis │
+  └─────────────────────────────────────────────────────┘
+               │
+               ▼
+  Post result as comment (author: "Coding Agent" system user)
+  Update archon_task_acknowledgements (status: submitted_for_review)
+  confidence_score = 0.80
+  UPDATE task status → 'review'
+               │
+               ▼
+  HUMAN SUPERVISOR reviews comment
+  Approves → status 'done' + quality score 1–10
+  Rejects  → status 'doing' (agent reworks)
+```
+
+---
+
+## ★ REQUIRED SETUP — Do This Before Any Demo
+
+### STEP 1 — Fix the PostgreSQL trigger (ONE-TIME — run in Supabase SQL Editor)
+
+This resolves a type mismatch that blocks all task status changes (drag-and-drop, agent dispatch, manual updates).
+
 ```sql
--- Run in Supabase
-DELETE FROM archon_user_sessions;
-DELETE FROM archon_invitations;
-DELETE FROM archon_notifications;
-DELETE FROM archon_tasks;
-DELETE FROM archon_sprints;
-DELETE FROM archon_projects;
-DELETE FROM archon_project_memberships;
-DELETE FROM archon_org_memberships;
-DELETE FROM archon_teams;
-DELETE FROM archon_departments;
-DELETE FROM archon_organizations;
-DELETE FROM archon_users_profile;
+CREATE OR REPLACE FUNCTION record_status_change()
+RETURNS TRIGGER AS $$
+DECLARE
+    time_in_status INTERVAL;
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status THEN
+        time_in_status := NOW() - OLD.updated_at;
+        INSERT INTO archon_task_status_history (
+            task_id, user_id, old_status, new_status, time_in_previous_status
+        ) VALUES (
+            NEW.id,
+            '00000000-0000-0000-0000-000000000001'::uuid,
+            OLD.status,
+            NEW.status,
+            time_in_status
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
-### 2. Clear Browser
-```javascript
-localStorage.clear();
+Verify it worked:
+```sql
+SELECT prosrc FROM pg_proc WHERE proname = 'record_status_change';
+-- Should return the function body WITHOUT the word COALESCE
 ```
 
-### 3. Prepare Demo Data
-Have ready:
-- Email: demo@company.com
-- Password: Demo2026!
-- Org Name: Acme Corporation
-- Project idea: "Mobile App Redesign"
+### STEP 2 — Start all 4 containers (including the agents container)
 
-### 4. Check Services
 ```bash
-docker compose ps  # All should be "healthy"
-curl http://localhost:8181/health  # Should return {"ready": true}
+docker compose --profile agents up -d
+```
+
+Verify:
+```bash
+docker compose ps
+```
+
+Expected:
+```
+NAME          STATUS
+10x-server    Up (healthy)   :8181
+10x-mcp       Up (healthy)   :8051
+10x-agents    Up (healthy)   :8052
+10x-ui        Up (healthy)   :3737
+```
+
+> Without `--profile agents`, the 10x-agents container does NOT start.
+> Coding Agent will not work.
+
+### STEP 3 — Verify agent initialized
+
+```bash
+docker logs 10x-agents 2>&1 | grep -E "coding|Initialized|OPENAI"
+```
+
+Expected:
+```
+INFO: Set credential: OPENAI_API_KEY
+INFO: Initialized coding agent with model: openai:gpt-4o-mini
+```
+
+### STEP 4 — (Optional) Clean database for a fresh start-to-finish demo
+
+```sql
+-- Safe to run — preserves org, users, agent system users
+DELETE FROM archon_agent_task_reviews;
+DELETE FROM archon_task_acknowledgements;
+DELETE FROM archon_task_status_history;
+DELETE FROM archon_task_comments;
+DELETE FROM archon_task_dependencies;
+DELETE FROM archon_tasks;
+DELETE FROM archon_velocity_history;
+DELETE FROM archon_sprints;
+DELETE FROM archon_project_memberships;
+DELETE FROM archon_projects;
+DELETE FROM archon_notifications;
 ```
 
 ---
 
-## DEMO SCRIPT - Follow This Exactly
-
-### Scene 1: First-Time User Experience (2 minutes)
-
-**SAY:** "Let me show you how easy it is to get started with 10x PM. Imagine you're a project manager at Acme Corporation, and you've just heard about our platform."
-
-**DO:**
-1. Open browser → `http://localhost:3737`
-2. System auto-redirects to **Login page**
-
-**HIGHLIGHT:** "Notice the system immediately prompts for authentication. Security-first approach."
-
-3. Click **"Sign up"** link
-4. Fill sign-up form:
-   - **Name:** Sarah Johnson
-   - **Email:** sarah@acmecorp.com
-   - **Password:** SecurePass123!
-
-**SAY:** "The first user to sign up automatically becomes the organization owner with full administrative access."
-
-5. Click **"Continue"**
-6. Fill organization form:
-   - **Organization Name:** Acme Corporation
-   - **Company Domain:** acmecorp.com
-
-7. Click **"Create Organization"**
-
-**RESULT:** Redirected to **Admin Dashboard**
-
-**HIGHLIGHT:** "Within 30 seconds, Sarah has a fully configured project management system with enterprise-grade security and role-based access control."
+## DEMO SCRIPT — Complete Walkthrough
 
 ---
 
-### Scene 2: Admin Dashboard Overview (2 minutes)
+### SCENE 1 — Sign Up & Organization Creation
 
-**SAY:** "This is the Admin Dashboard - command center for the entire organization."
+**SAY:** "We start from zero. No config files, no deployment scripts, no database setup. In under 60 seconds you have a fully configured enterprise PM platform."
 
-**POINT OUT:**
+**DO — Open browser → http://localhost:3737**
 
-1. **Quick Stats** (top row)
-   - Team Members: 1 (just Sarah)
-   - Active Projects: 0 (fresh start)
-   - Tasks: 0
-   - Active Sprints: 0
+The app redirects to the login page.
 
-**SAY:** "Real-time metrics pulled from the database. As we add projects and tasks, these update automatically."
+1. Click **"Sign up"** or **"Create account"**
+2. Fill in:
+   - Full Name: `Sarah Johnson`
+   - Email: `sarah@acmecorp.com`
+   - Password: `SecurePass123!`
+3. Click **Continue**
+4. Organization Name: `Acme Corporation`
+5. Click **"Create Organization"**
 
-2. **Quick Actions** (middle row)
-   - Manage Team
-   - View Projects
-   - Analytics
+**SEE:** Admin Dashboard loads with welcome screen.
 
-**SAY:** "Single-click access to key management functions."
-
-3. **Recent Activity** (bottom)
-   - Shows system events in real-time
-   - Audit trail for compliance
-
-**HIGHLIGHT:** "Every action is logged - perfect for regulated industries."
+**HIGHLIGHT:**
+- First user is automatically assigned `Owner` role
+- Organization created with full 7-level role hierarchy
+- Database seeded with system users (including AI agent identities) automatically on server boot
+- Zero manual SQL or configuration needed
 
 ---
 
-### Scene 3: Team Building (3 minutes)
+### SCENE 2 — Admin Dashboard Overview
 
-**SAY:** "Now Sarah wants to build her team. Let's invite a team member."
+**SAY:** "Owners and Admins land on the Admin Dashboard — a real-time snapshot of the entire organization."
 
-**DO:**
-1. Click **"Manage Team"** quick action
-2. Or click **👥 Team icon** in left sidebar
+**DO — Look at what's on screen (Dashboard):**
 
-**SHOW:** Team Management page
+You see live metrics including:
+- Total members by role
+- Active projects count
+- Tasks broken down by status: Backlog / Todo / Doing / Review / Done
+- Active and total sprints
+- Pending invitations count
 
-3. Click **"Invite Team Member"**
-4. Fill invitation form:
-   - **Email:** john@acmecorp.com
-   - **Role:** Select "Lead"
-   - **Message:** "Welcome to the Mobile App Redesign project!"
-
-**SAY:** "We have a 7-level role hierarchy: Owner, Admin, Manager, Lead, Member, Viewer, and AI Agent. Each role has precisely defined permissions."
-
-5. Click **"Send Invitation"**
-
-**RESULT:**
-- Toast notification: "Invitation sent to john@acmecorp.com"
-- Email sent via SendGrid (show email if possible)
-
-**SHOW EMAIL (if available):**
-- Beautiful branded email
-- "Accept Invitation" button
-- 7-day expiration
-
-**HIGHLIGHT:** "The system enforces permission rules - Sarah can only assign roles equal to or below her own level. A Manager can't create an Admin."
+**HIGHLIGHT:** "Every number is live. No refresh needed — the data updates automatically every 30 seconds via smart polling that pauses when you switch tabs."
 
 ---
 
-### Scene 4: Create Project (2 minutes)
+### SCENE 3 — Connect AI Provider
 
-**SAY:** "Let's create our first project - a mobile app redesign."
+**SAY:** "30 seconds to unlock AI. One API key powers agent auto-execution, sprint estimation, and document generation."
 
-**DO:**
-1. Click **📈 Projects icon** in sidebar (or logo at top)
-2. Click **"+ New Project"** button
-3. Fill project form:
-   - **Title:** Mobile App Redesign Q1 2026
-   - **Description:** Complete overhaul of iOS and Android apps with modern UI/UX
+**DO — UI: Settings → Credentials**
 
-4. Click **"Create Project"**
+1. Click the **Settings** icon in the sidebar
+2. Navigate to **Credentials**
+3. Enter key: `OPENAI_API_KEY`, value: your OpenAI key
+4. Click **Save**
 
-**RESULT:**
-- Project card appears
-- Task counts show: ToDo: 0, Doing: 0, Done: 0
-
-**HIGHLIGHT:** "Projects are the top-level containers. Each project can have multiple sprints, hundreds of tasks, and dedicated team members."
-
-5. Click on the project card to select it
-
-**SHOW:** Tabs appear: Docs | Tasks | Sprint | Analytics
-
----
-
-### Scene 5: Sprint Planning with AI (4 minutes)
-
-**SAY:** "Now comes the game-changer - AI-powered sprint planning."
-
-**DO:**
-1. Click **"Sprint"** tab
-2. Click **"+ New Sprint"** button
-3. Fill sprint form:
-   - **Name:** Sprint 1 - Foundation
-   - **Goal:** Setup project structure and design system
-   - **Start Date:** Today
-   - **End Date:** 2 weeks from now
-   - **Capacity:** 160 hours (2 people × 2 weeks × 40 hrs)
-
-4. Click **"Create Sprint"**
-5. Click **"Start Sprint"** button
-
-**RESULT:**
-- Sprint status changes to "active"
-- 🔔 Notification appears: "Sprint started: Sprint 1 - Foundation"
-
-**HIGHLIGHT:** "Real-time notifications keep the team synchronized. No more missed updates."
-
----
-
-### Scene 6: Create Tasks (Human & AI) (3 minutes)
-
-**SAY:** "Now let's add tasks. We can create tasks manually or use AI assistance."
-
-#### Manual Task Creation
-
-1. Click **"Tasks"** tab
-2. See Kanban board with 4 columns
-3. *(Simulate adding a task via Claude Code MCP)*
-
-**SAY:** "In the real workflow, we'd use our AI IDE integration. Let me show you..."
-
-#### Via Claude Code (MCP)
-
-**In Claude Code:**
-```
-Create a task for designing the login screen
+**Verify via terminal:**
+```bash
+curl -s http://localhost:8181/api/ai/providers | python -m json.tool
 ```
 
-**Claude Code calls:**
+**SEE:**
+```json
+{
+  "openai": {
+    "available": true,
+    "status": "Ready",
+    "default_model": "gpt-4o"
+  }
+}
 ```
-archon:manage_task(
+
+**Provider options:**
+| Provider | Use Case |
+|----------|----------|
+| OpenAI GPT-4o-mini | Default — fast, cost-effective |
+| OpenAI GPT-4o | Complex tasks |
+| Anthropic Claude | Best quality output |
+| Ollama (local) | Free, fully private |
+
+---
+
+### SCENE 4 — Invite Team Members
+
+**SAY:** "Role-based invitations with one security rule: you can never grant a role equal to or above your own. A Manager cannot create another Manager."
+
+**DO — UI: Team → Invite User**
+
+1. Click **Team** in the sidebar
+2. Click **"Invite User"**
+3. Enter:
+   - Email: `john.doe@acmecorp.com`
+   - Role: `Lead`
+4. Click **"Send Invitation"**
+
+**SEE:** Invitation appears in the "Pending Invitations" list.
+
+**Role Hierarchy:**
+```
+Owner > Admin > Manager > Lead > Member > Viewer > AI Agent
+```
+
+Each level can only invite roles **below** their own.
+
+**DO — Accept the invitation (simulate from John's side):**
+
+The invite link contains a token. Open a new browser tab or incognito and use:
+- URL: `http://localhost:3737/invite/{token}` (or navigate to the Accept Invitation page)
+- Fill in John's name and password to complete onboarding
+
+**SEE:** John now appears in Team Members list with role `Lead`.
+
+---
+
+### SCENE 5 — Create a Project (via MCP in Claude Code)
+
+**SAY:** "Developers never leave their IDE. From Claude Code, Cursor, or Windsurf, they can manage the entire project in natural language."
+
+**DO — In Claude Code (MCP connected):**
+
+```
+Create a new project called "Mobile App Redesign Q1 2026"
+Description: Complete overhaul of iOS and Android apps with new design system
+```
+
+MCP tool call:
+```python
+manage_project(
   action="create",
-  project_id="<project-id>",
-  title="Design Login Screen",
-  description="Create modern, accessible login UI with email/password fields",
-  assignee="Sarah Johnson",
-  priority="high",
-  story_points=5
+  title="Mobile App Redesign Q1 2026",
+  description="Complete overhaul of iOS and Android apps with new design system"
 )
 ```
 
-**RESULT:**
-- Task appears in "Backlog" column
-- Assigned to Sarah
-- 5 story points
-- High priority badge
-
-**HIGHLIGHT:** "AI understands natural language and creates properly structured tasks automatically."
-
----
-
-### Scene 7: AI Task Estimation (2 minutes)
-
-**SAY:** "One of our most powerful features - AI-powered task estimation."
-
-**DO:**
-1. Find a task without story points
-2. *(Simulated)* Click **"🤖 AI Estimate"** badge
-3. Or use AI via MCP:
-
-**In Claude Code:**
-```
-Estimate the "Design Login Screen" task
+**SEE:**
+```json
+{
+  "id": "proj-abc123",
+  "title": "Mobile App Redesign Q1 2026",
+  "task_counts": {
+    "backlog": 0,
+    "todo": 0,
+    "doing": 0,
+    "review": 0,
+    "done": 0
+  }
+}
 ```
 
-**System calls AI:**
-- Analyzes title + description
-- Returns: 5 story points, 8 hours
-- Shows confidence: 85%
+**DO — Switch to browser UI**
 
-**SHOW:**
-- AI suggestion appears in panel
-- Click "Accept" → Story points assigned
+Navigate to Projects → click "Mobile App Redesign Q1 2026"
 
-**HIGHLIGHT:** "The AI learns from historical data. The more sprints you complete, the more accurate it becomes."
+**SEE:** Project opens with the Tasks tab selected, showing an empty 5-column Kanban board.
+
+**HIGHLIGHT:** "Five stages — not the typical 3. Backlog → Todo → Doing → Review → Done mirrors real agile workflows."
 
 ---
 
-### Scene 8: AI Sprint Planning (2 minutes)
+### SCENE 6 — Create Tasks with Full Fields
 
-**SAY:** "Now watch AI plan an entire sprint for us."
+**SAY:** "Tasks have enterprise-grade fields: story points, time estimates, due dates, tags, dependencies, reviewer assignment. All from natural language."
 
-**DO:**
-1. Stay on **Sprint** tab
-2. Click **"✨ AI Plan Sprint"** button
+**DO — Via MCP:**
 
-**MODAL OPENS showing:**
-- Recommended Tasks: 8 tasks
-- Total Story Points: 42
-- Capacity Utilization: 78%
-- AI Reasoning: "Selected high-priority tasks within capacity..."
-
-**SAY:** "The AI analyzes all backlog tasks, considers priorities, dependencies, and team capacity. It recommends the optimal set of tasks and leaves a 20% buffer for unexpected work."
-
-3. Show capacity bar: Green (good), Orange (warning), Red (overloaded)
-
-**HIGHLIGHT:** "If over 90% capacity, AI warns you to reduce scope. This prevents team burnout."
-
-4. Click **"Accept Plan"**
-
-**RESULT:**
-- 8 tasks automatically assigned to sprint
-- Sprint board populates
-- Capacity card updates
-
----
-
-### Scene 9: Assign Tasks to Agent (2 minutes)
-
-**SAY:** "We can assign tasks to human team members OR AI agents. Let me show you both."
-
-#### Assign to Human
-
-**Via UI:**
-1. Click on a task card
-2. Change assignee to "John Doe" (the Lead we invited)
-3. Task updates
-4. 🔔 John gets notification: "Task assigned: Design Login Screen"
-
-#### Assign to AI Agent
-
-**Via MCP (Claude Code):**
 ```
-Assign the "Write API documentation" task to Claude Code agent
+Create these 4 tasks in Mobile App Redesign:
+
+1. "Implement Auth API"
+   Priority: critical
+   Story points: 8
+   Estimated hours: 16
+   Due date: 2026-03-01
+   Assignee: John Doe
+
+2. "Design Login Screen"
+   Priority: high
+   Story points: 5
+   Estimated hours: 8
+   Assignee: Sarah Johnson
+   Reviewer: John Doe
+
+3. "Write API Documentation"
+   Priority: medium
+   Story points: 3
+   Assignee: Coding Agent
+   Description: Document all REST API endpoints with request/response examples
+
+4. "User Testing Plan"
+   Priority: low
+   Story points: 2
+   Tags: ["testing", "ux"]
 ```
 
-**System:**
-- Checks agent capabilities
-- Verifies agent can handle "documentation" tasks
-- Assigns task
-- Logs: "Task assigned to AI Agent: Claude Code"
-- Sends notification to supervisor (Lead)
+**SEE — Browser Kanban board:**
+```
+BACKLOG          TODO    DOING    REVIEW    DONE
+───────────────
+[Implement Auth API]     ● CRITICAL  8pts  John Doe    ⏰ Mar 1
+[Design Login Screen]    ● HIGH      5pts  Sarah        👁 John
+[Write API Docs]         ● MEDIUM    3pts  Coding Agent
+[User Testing Plan]      ● LOW       2pts  Unassigned   🏷 testing, ux
+```
 
-**HIGHLIGHT:** "AI agents work alongside humans. Every agent action is logged and supervised by a team lead for quality control."
+**DO — Click on "Implement Auth API" to open the Task Edit Modal**
+
+Show all the fields visible in the modal:
+- Status dropdown (5 options)
+- Priority selector (color-coded)
+- Assignee dropdown (all team members + agents)
+- Story points input
+- Estimated hours / Actual hours
+- Due date picker
+- Reviewer assignment
+- Tags input
+- Description (rich text)
+- Dependencies section
+- Comments section (at bottom)
 
 ---
 
-### Scene 10: Real-Time Collaboration (2 minutes)
+### SCENE 7 — Board View vs Table View
 
-**SAY:** "Now let's see real-time collaboration in action."
+**SAY:** "Two views for different work styles. Board for visual thinkers, table for data-driven teams."
+
+**DO — Board View (default):**
+
+Already visible. Drag "Implement Auth API" from **Backlog** to **Todo**.
+
+**SEE:** Card smoothly slides to the Todo column. Status updates instantly.
+
+**DO — Switch to Table View:**
+
+Click the table/grid icon in the top-right view controls.
+
+**SEE:** All tasks appear in a spreadsheet layout with columns:
+- Title | Status | Priority | Assignee | Story Points | Due Date | Tags
+
+**DO — Demonstrate inline editing:**
+1. Click on the status cell of any task → dropdown appears inline
+2. Click on the priority cell → priority selector appears
+3. Click on the assignee cell → user dropdown appears
+4. Drag a row handle to reorder task priority
+
+**HIGHLIGHT:** "Same data, different interface. Both views stay in sync — changes in one immediately reflect in the other."
+
+---
+
+### SCENE 8 — Priority Filter
+
+**SAY:** "One click to focus. When you have 50 tasks on the board, filter to just the critical and high priority items."
+
+**DO — In either view, find the Priority filter dropdown in the view controls:**
+
+1. Click the **Priority** filter dropdown
+2. Select **"Critical"**
+
+**SEE:** Only the "Implement Auth API" card remains visible. All other tasks are hidden.
+
+3. Select **"High"**
+
+**SEE:** Only "Design Login Screen" shown.
+
+4. Select **"All"** to restore full view.
+
+---
+
+### SCENE 9 — Task Dependencies
+
+**SAY:** "Dependencies prevent teams from starting blocked work. The system enforces this — you can't drag a blocked task to 'Doing'."
+
+**DO — Open Task Edit Modal for "Design Login Screen":**
+
+1. Click on "Design Login Screen" card
+2. Scroll to **Dependencies** section
+3. In the "Blocked by" ComboBox, search for "Implement Auth API"
+4. Select it — it appears as a chip
+
+**OR via MCP:**
+```python
+manage_task_dependency(
+  action="add",
+  task_id="<design-login-screen-id>",
+  depends_on_id="<implement-auth-api-id>"
+)
+```
+
+**SEE:** "Design Login Screen" now shows a 🔒 lock badge with count "1" on the Kanban card. Hovering over the lock shows: "Blocked by: Implement Auth API (todo)"
+
+**DO — Try to drag "Design Login Screen" to the Doing column:**
+
+**SEE:** A toast message appears:
+```
+Cannot start: 1 blocker must be completed first
+• Implement Auth API (todo)
+```
+
+Task snaps back to its original column. No status change saved.
+
+**DO — Via API (server-side enforcement):**
+```bash
+curl -X PUT http://localhost:8181/api/tasks/<login-screen-id> \
+  -H "Authorization: Bearer <token>" \
+  -d '{"status": "doing"}'
+```
+
+**SEE:**
+```json
+{
+  "error": "Cannot start task: 1 blocker must be completed first",
+  "blockers": ["Implement Auth API (status: todo)"]
+}
+```
+
+**HIGHLIGHT:** "Two layers of protection — UI blocks the drag, API blocks the HTTP call. Even if someone bypasses the UI, the server says no."
+
+**DO — Complete Auth API first:**
+
+Drag "Implement Auth API" → Doing → Review → Done.
+
+**SEE:** The lock badge disappears from "Design Login Screen". It can now be moved to Doing.
+
+---
+
+### SCENE 10 — WIP Limits
+
+**SAY:** "Research shows multitasking kills productivity. WIP limits cap active work at 3 tasks per person — enforced server-side, not just a suggestion."
+
+**DO — Move 3 tasks assigned to Sarah to "Doing". Then try a 4th:**
+
+```bash
+curl -X PUT http://localhost:8181/api/tasks/<fourth-task-id> \
+  -H "Authorization: Bearer <token>" \
+  -d '{"status": "doing", "assignee": "Sarah Johnson"}'
+```
+
+**SEE:**
+```json
+{
+  "error": "WIP limit reached: 'Sarah Johnson' already has 3 task(s) in progress. Complete or reassign existing tasks first."
+}
+```
+
+The 4th task stays in its current column.
+
+---
+
+### SCENE 11 — Task Comments with @Mentions
+
+**SAY:** "Every task has threaded comments. Mention a team member to notify them directly."
+
+**DO — Click on any task → scroll to Comments section:**
+
+1. Click in the comment box
+2. Type: `@john.doe Can you review the auth implementation? I need your sign-off before Friday.`
+3. Click **Post Comment**
+
+**SEE:**
+- Comment appears with Sarah's avatar and name
+- John's notification count increases (bell icon in his sidebar)
+- The `@john.doe` renders as a highlighted mention
+
+**DO — Switch to John's session (or another browser):**
+
+**SEE:** Bell icon shows unread count badge. Clicking it shows the notification:
+```
+Sarah Johnson mentioned you in a comment on "Implement Auth API"
+```
+
+---
+
+### SCENE 12 — Sprint Planning
+
+**SAY:** "Full sprint management. Not just labeling tasks with sprint numbers — actual capacity planning, burndown tracking, and velocity history."
+
+**DO — Via MCP in Claude Code:**
+
+```
+Create a sprint called "Foundation Sprint" for Mobile App Redesign project
+Goal: Core authentication and design system
+Start date: 2026-02-19
+End date: 2026-03-04
+Capacity: 160 hours
+```
+
+MCP call:
+```python
+manage_sprint(
+  action="create",
+  project_id="<project-id>",
+  name="Foundation Sprint",
+  goal="Core authentication and design system",
+  start_date="2026-02-19",
+  end_date="2026-03-04",
+  capacity_hours=160
+)
+```
+
+**SEE:**
+```json
+{
+  "id": "sprint-001",
+  "name": "Foundation Sprint",
+  "status": "planning",
+  "capacity_hours": 160
+}
+```
+
+**DO — Add tasks to the sprint:**
+
+```python
+assign_task_to_sprint(task_id="<auth-api-id>", sprint_id="sprint-001")
+assign_task_to_sprint(task_id="<design-login-id>", sprint_id="sprint-001")
+```
+
+**SEE:** Both tasks now show "Foundation Sprint" as their sprint label.
+
+**DO — View sprint capacity before starting:**
+
+```python
+get_sprint_capacity(sprint_id="sprint-001")
+```
+
+**SEE:**
+```json
+{
+  "sprint_name": "Foundation Sprint",
+  "status": "planning",
+  "total_tasks": 2,
+  "total_story_points": 13,
+  "total_estimated_hours": 24,
+  "capacity_hours": 160,
+  "capacity_utilization_percent": 15.0
+}
+```
+
+**DO — Start the sprint:**
+
+```python
+manage_sprint(action="update", sprint_id="sprint-001", status="active")
+```
+
+**SEE:** Sprint status changes to "active". All project members receive a notification: "Foundation Sprint has started."
+
+**DO — In the UI, navigate to the Sprint view:**
+
+**SEE:** The Sprint board appears with tasks from Foundation Sprint. Capacity bar shows:
+```
+Foundation Sprint [ACTIVE]
+Story Points: 13    Capacity: 24/160 hrs (15%)
+████░░░░░░░░░░░░░░░░░░░ 15%  ✅ Healthy
+Ends: Mar 4 (13 days remaining)
+```
+
+---
+
+### SCENE 13 — Sprint Analytics: Burndown & Velocity
+
+**SAY:** "Predictive analytics. Not just what happened — whether you'll hit your deadline."
+
+**DO — Navigate to Project → Analytics tab:**
+
+**Burndown Chart:**
+
+Shows ideal burndown line vs actual remaining work:
+```
+Story Points
+    13 │╲ ← Ideal burndown
+    10 │ ╲─╮
+     8 │   ╲─╮  ← Actual (behind by 1 day)
+     5 │     ╲╯
+     0 └──────────────────── Day
+            0              14
+Prediction: On track to complete by Mar 4
+```
+
+**HIGHLIGHT:** "System warns you if you're falling behind — before the sprint ends, not after."
+
+**Velocity Chart:**
+
+After completing the sprint, velocity is auto-recorded:
+```
+Sprint Velocity (Story Points Completed)
+│
+│    ▓▓
+│  ▓▓▓▓  ▓▓▓▓
+│  ▓▓▓▓  ▓▓▓▓  ▓▓
+│  ▓▓▓▓  ▓▓▓▓  ▓▓▓▓
+└──────────────────────────
+   Sprint1 Sprint2 Sprint3
+   Avg velocity: 11.3 pts/sprint
+```
+
+**Team Performance section:**
+- Tasks completed per member
+- Average time-in-status per stage
+- On-time delivery rate
+
+---
+
+### SCENE 14 — Notifications System
+
+**SAY:** "Every significant event generates a notification. Team members always know what needs their attention."
+
+**DO — Click the bell icon in the sidebar:**
+
+**SEE — Notification panel opens showing:**
+```
+🔔 Notifications (3 unread)
+
+● Sprint "Foundation Sprint" has started             2 min ago
+● Sarah Johnson mentioned you in "Implement Auth API" 5 min ago
+● Task "Design Login Screen" is now unblocked        8 min ago
+
+[Mark All Read]
+```
+
+**Events that fire notifications:**
+| Event | Who Gets Notified |
+|-------|-------------------|
+| Task assigned to you | Assignee |
+| You are mentioned in a comment | Mentioned user |
+| Agent accepts your task | Task creator |
+| Agent completes task (→ review) | Leads + Reviewer |
+| Task you review moves to review | Reviewer |
+| Sprint started | All project members |
+| Sprint completed | Project leads |
+| Task due date approaching | Assignee + Lead |
+| You are invited to organization | Invitee |
+
+**DO — Click on a notification:**
+
+**SEE:** Navigates directly to the related task or sprint. Notification marked as read.
+
+**DO — Click "Mark All Read":**
+
+**SEE:** Badge disappears from the bell icon. Count resets to 0.
+
+---
+
+### SCENE 15 — Assign Task to a Human (Full Status Progression)
+
+**SAY:** "Let's follow a human-assigned task through the entire lifecycle — every status, every timestamp."
+
+**DO — Via MCP, move "Design Login Screen" through all stages:**
+
+```python
+# Step 1: Move to Todo
+manage_task(action="update", task_id="<design-login-id>", status="todo")
+```
+
+**SEE:** Card moves to Todo column. No timestamp yet (started_at is only set when → doing).
+
+```python
+# Step 2: Sarah starts work
+manage_task(action="update", task_id="<design-login-id>", status="doing")
+```
+
+**SEE:**
+- Card moves to Doing column
+- `started_at` automatically recorded in the database
+- Sarah's WIP count increases to 1
+
+```python
+# Step 3: Sarah submits for review
+manage_task(action="update", task_id="<design-login-id>", status="review")
+```
+
+**SEE:**
+- Card moves to Review column
+- Reviewer (John Doe) receives notification: "Design Login Screen is ready for your review"
+
+**DO — Reviewer rejects and sends back:**
+
+```python
+# Step 4: John sends back for rework
+manage_task(action="update", task_id="<design-login-id>", status="doing")
+```
+
+**SEE:** Card returns to Doing. Sarah is notified: "Design Login Screen was sent back for revision."
+
+```python
+# Step 5: Sarah fixes it, resubmits
+manage_task(action="update", task_id="<design-login-id>", status="review")
+
+# Step 6: John approves
+manage_task(action="update", task_id="<design-login-id>", status="done")
+```
+
+**SEE:**
+- Card moves to Done column
+- `completed_at` automatically recorded
+- Sprint burndown updates automatically
+
+**HIGHLIGHT:** "The entire lifecycle — backlog to done — with auto-timestamps at every transition. You never need to manually log when work started or ended."
+
+---
+
+### SCENE 16 — Task Status History (Audit Trail)
+
+**SAY:** "Complete audit trail. Every status transition is timestamped — who moved it, when, and exactly how long it spent at each stage."
+
+**DO — Query the status history:**
+
+```sql
+SELECT old_status, new_status, created_at,
+       EXTRACT(EPOCH FROM (created_at - LAG(created_at) OVER (ORDER BY created_at)))/60 AS minutes_in_stage
+FROM archon_task_status_history
+WHERE task_id = '<design-login-id>'
+ORDER BY created_at;
+```
+
+**SEE:**
+```
+old_status  new_status  created_at                minutes_in_stage
+──────────  ──────────  ──────────────────────    ────────────────
+backlog     todo        2026-02-19 09:00:00       (start)
+todo        doing       2026-02-19 09:15:00       15 min
+doing       review      2026-02-19 11:30:00       135 min (2h 15m)
+review      doing       2026-02-19 11:45:00       15 min
+doing       review      2026-02-19 13:00:00       75 min (1h 15m)
+review      done        2026-02-19 13:05:00       5 min
+```
+
+**HIGHLIGHT:** "Cycle time, lead time, rework rate — all computable from this table. Your process improvement data, built in."
+
+---
+
+### SCENE 17 ★ — Assign Task to AI Agent (THE CENTERPIECE DEMO)
+
+**SAY:** "Now the thing that makes this different from every other PM tool. I'm going to assign a task to the Coding Agent — then I won't touch anything. Watch what happens."
+
+**DO — Open a terminal and start watching server logs:**
+
+```bash
+docker logs -f 10x-server 2>&1 | grep -E "dispatcher|claimed|pending|agent"
+```
+
+**DO — In a second terminal, watch agents service:**
+
+```bash
+docker logs -f 10x-agents 2>&1
+```
+
+**DO — Create the task via MCP:**
+
+```python
+manage_task(
+  action="create",
+  project_id="<project-id>",
+  title="Generate REST API documentation for all endpoints",
+  description="Document all 114 REST API endpoints with request parameters, response schemas, authentication requirements, and example payloads. Group by domain: auth, projects, tasks, sprints, analytics.",
+  priority="high",
+  assignee="Coding Agent",
+  story_points=3
+)
+```
+
+**SEE:** Task created with status `backlog`, assignee `Coding Agent`.
+
+**SAY:** "Task created. I'm starting a timer. The dispatcher polls every 30 seconds."
+
+**WATCH — Server log (within 30 seconds):**
+```
+Task dispatcher: found 1 pending agent task(s)
+Task dispatcher: claimed 'Generate REST API documentation...' → dispatching to Coding Agent
+```
+
+**DO — Check task status:**
+
+```python
+find_tasks(task_id="<agent-task-id>")
+```
+
+**SEE:**
+```json
+{
+  "title": "Generate REST API documentation for all endpoints",
+  "status": "doing",
+  "assignee": "Coding Agent"
+}
+```
+
+**SAY:** "Status is now 'doing'. Zero human clicks. The agent is working."
+
+**WATCH — Agents log (1–3 minutes):**
+```
+INFO: POST /agents/execute-task HTTP/1.1  200 OK
+```
+
+**DO — Check again (after 2–3 minutes):**
+
+```python
+find_tasks(task_id="<agent-task-id>")
+```
+
+**SEE:**
+```json
+{
+  "status": "review",
+  "assignee": "Coding Agent"
+}
+```
+
+**SAY:** "Status moved to 'review' automatically. The agent posted its output and put itself in the review queue. Three things happened with zero human action:
+1. Task detected and claimed within 30 seconds
+2. Agent searched the knowledge base for context
+3. Output posted as a comment, task moved to Review"
+
+---
+
+### SCENE 18 — View Agent Output in the UI
+
+**SAY:** "Let's see what the Coding Agent actually produced."
+
+**DO — Browser: Navigate to the task in the UI:**
+
+1. Go to the project's Task board
+2. Find "Generate REST API documentation" in the **Review** column (🔒 icon gone, agent completed it)
+3. Click on the card to open the Task Detail modal
+4. Scroll to the **Comments** section at the bottom
+
+**SEE — Agent comment:**
+```
+🤖 Coding Agent output:
+
+**Task Analysis:**
+This task requires documenting 114 REST API endpoints organized by domain.
+
+**Documentation Structure:**
+
+## Authentication Endpoints
+- POST /api/auth/signup
+  Request: { email, password, name, org_name }
+  Response: { user_id, token, organization_id }
+  Auth required: No
+
+- POST /api/auth/login
+  Request: { email, password }
+  Response: { access_token, user_id, role }
+  Auth required: No
+
+## Project Endpoints
+- GET /api/projects
+  Response: Array<Project> (with task_counts)
+  Auth required: Yes (any role)
+  Caching: ETag enabled
+
+[... continues for all 114 endpoints ...]
+
+**Blockers / Questions:**
+- None identified. Documentation is complete.
+```
+
+**HIGHLIGHT:** "Real output. The agent read the task description, searched the knowledge base for context, and generated structured documentation. Posted under its own identity — full attribution, full audit trail."
+
+**DO — Show the "Acknowledgements" record:**
+
+```bash
+curl -s http://localhost:8181/api/tasks/<TASK_ID>/acknowledgements \
+  -H "Authorization: Bearer <TOKEN>" | python -m json.tool
+```
+
+**SEE:**
+```json
+[
+  {
+    "agent_id": "Coding Agent",
+    "status": "submitted_for_review",
+    "agent_message": "Work completed. Ready for human review.",
+    "confidence_score": 0.80,
+    "created_at": "2026-02-19T11:35:45Z"
+  }
+]
+```
+
+---
+
+### SCENE 19 — Human Supervisor Reviews and Approves Agent Work
+
+**SAY:** "Human in the loop. The agent cannot mark its own work as done. A human supervisor must review and approve. No agent can ever self-approve."
+
+**DO — Approve via API:**
+
+```bash
+curl -X POST http://localhost:8181/api/agent/tasks/<TASK_ID>/approve \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "quality_score": 8,
+    "comments": "Good structure, covers all endpoints. Approved."
+  }'
+```
+
+**SEE:**
+```json
+{
+  "message": "Work approved",
+  "task_status": "done",
+  "quality_score": 8
+}
+```
+
+**DO — Check the UI:**
+
+**SEE:** Task card is now in the **Done** column. Quality score stored in `archon_agent_task_reviews` table.
+
+**DO — Reject scenario (for contrast):**
+
+```bash
+curl -X POST http://localhost:8181/api/agent/tasks/<TASK_ID>/reject \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "feedback": "Missing authentication details for admin endpoints. Please re-document sections 8–12."
+  }'
+```
+
+**SEE:**
+```json
+{
+  "message": "Work rejected — task returned to doing",
+  "task_status": "doing"
+}
+```
+
+Agent receives the rejection feedback and the cycle begins again on the next poll.
+
+---
+
+### SCENE 20 — Agent Logs (Show the Full Proof)
+
+**SAY:** "Full transparency. Every single action the agent system took — from detection to approval — is in the logs."
 
 **DO:**
-1. Move a task from "To Do" → "Doing" (drag and drop)
 
-**RESULT:**
-- Task updates instantly
-- 🔔 Notification sent to assignee
-- Sprint burndown updates
-- Capacity recalculates
+```bash
+# Full dispatcher activity from the demo
+docker logs 10x-server 2>&1 | grep -E "dispatcher|claimed|agent" | tail -30
+```
 
-2. Click **🔔 Notification bell** in sidebar
+**SEE:**
+```
+Task dispatcher started — polling every 30s for tasks assigned to: Coding Agent, Archon
+Agent system users verified/created (Coding Agent, Archon)
+Task dispatcher: found 1 pending agent task(s)
+Task dispatcher: claimed 'Generate REST API documentation...' → dispatching to Coding Agent
+Task dispatcher: task <id> → review
+```
 
-**SHOW:**
-- Notification panel opens
-- Lists recent updates
-- Click notification → Navigate to task
-- Mark as read → Badge updates
+```bash
+# Agents service execution log
+docker logs 10x-agents 2>&1 | tail -20
+```
 
-**HIGHLIGHT:** "The system polls every 10 seconds. In the background tab, polling pauses to save bandwidth. When you return, it immediately refreshes."
+**SEE:**
+```
+INFO: Set credential: OPENAI_API_KEY
+INFO: Initialized coding agent with model: openai:gpt-4o-mini
+INFO:     POST /agents/execute-task HTTP/1.1  200 OK
+```
 
----
-
-### Scene 11: Analytics & Insights (3 minutes)
-
-**SAY:** "Now the most impressive part - comprehensive analytics."
-
-**DO:**
-1. Click **"Analytics"** tab
-
-**SHOW Analytics Dashboard:**
-
-#### Quick Stats
-- Sprint Progress: 12% (real-time)
-- Days Left: 13 days
-- Story Points: 5/42 completed
-- Timeline Status: ✅ On Track
-
-**SAY:** "These aren't static reports. Every metric updates in real-time as work progresses."
-
-#### Sprint Burndown Chart
-- **Ideal Line (gray dashed):** Perfect linear burndown
-- **Actual Line (copper):** Team's real progress
-
-**POINT OUT:**
-- "We're ahead" → Green message
-- "We're behind" → Red warning with prediction
-- "At current velocity, will finish X days early/late"
-
-**HIGHLIGHT:** "The system predicts completion dates based on current velocity. If you're falling behind, it tells you exactly how many story points per day you need to catch up."
-
-#### Timeline Card
-**SHOW:**
-- Progress bar: Expected vs Actual
-- Time elapsed: 1 day / 14 days
-- Current velocity: 5 pts/day
-- **Prediction:** "At current velocity, finish 3 days early! 🎉"
-
-**HIGHLIGHT:** "This is predictive analytics. The system uses historical data and current velocity to forecast outcomes."
-
-#### Velocity Chart
-**SHOW (after completing Sprint 1):**
-- Bar chart showing story points per sprint
-- Trend line showing team acceleration
-- Average velocity calculation
-
-**SAY:** "After a few sprints, this shows your team's velocity trends. Are you getting faster? Slower? This data helps with capacity planning."
+**HIGHLIGHT:** "No black boxes. Every poll, every dispatch, every HTTP call is logged. You have a complete audit trail of what every agent did and when."
 
 ---
 
-### Scene 12: Multi-Provider AI (2 minutes)
+### SCENE 21 — MCP Tools — Developer Workflow in the IDE
 
-**SAY:** "We support multiple AI providers for maximum flexibility."
+**SAY:** "Developers manage the entire project without leaving their IDE. Every feature accessible via natural language."
 
-**SHOW (in Settings or API):**
+**DO — Demonstrate in Claude Code — all available MCP tools:**
 
-**Available Providers:**
-1. **Ollama (Local)**
-   - Free, runs on your servers
-   - Complete data privacy
-   - Good for security-sensitive industries
+**Project tools:**
+```python
+# List all projects
+find_projects()
 
-2. **Anthropic Claude**
-   - Best reasoning quality
-   - Most accurate estimations
-   - ~$3 per million tokens
+# Search projects
+find_projects(query="mobile")
 
-3. **OpenAI GPT-4**
-   - Great for structured outputs
-   - ~$10 per million tokens
+# Get specific project
+find_projects(project_id="proj-abc123")
 
-**SAY:** "You can switch providers based on your needs. Development on Ollama (free), production on Claude (best quality). The system gracefully falls back if a provider is unavailable."
+# Create project
+manage_project(action="create", title="New Feature", description="...")
 
-**HIGHLIGHT:** "This is unique in the market - multi-provider AI with automatic fallback ensures you're never blocked."
+# Update project
+manage_project(action="update", project_id="proj-abc123", title="Updated Title")
+```
+
+**Task tools:**
+```python
+# List all tasks in a project
+find_tasks(filter_by="project", filter_value="proj-abc123")
+
+# Filter by status
+find_tasks(filter_by="status", filter_value="doing")
+
+# Filter by assignee
+find_tasks(filter_by="assignee", filter_value="John Doe")
+
+# Get specific task
+find_tasks(task_id="task-123")
+
+# Create task
+manage_task(
+  action="create",
+  project_id="proj-abc123",
+  title="New Task",
+  priority="high",
+  story_points=5,
+  assignee="Coding Agent"
+)
+
+# Move task through lifecycle
+manage_task(action="update", task_id="task-123", status="review")
+
+# Complete task
+manage_task(action="update", task_id="task-123", status="done")
+```
+
+**Dependency tools:**
+```python
+# See all dependencies in project
+find_task_dependencies(project_id="proj-abc123")
+
+# See specific task's blockers
+find_task_dependencies(task_id="task-123")
+
+# Add dependency (Task A blocks Task B)
+manage_task_dependency(
+  action="add",
+  task_id="<task-B-id>",
+  depends_on_id="<task-A-id>"
+)
+
+# Remove dependency
+manage_task_dependency(action="remove", dependency_id="dep-123")
+```
+
+**Sprint tools:**
+```python
+# Create sprint
+manage_sprint(
+  action="create",
+  project_id="proj-abc123",
+  name="Sprint 2",
+  goal="Payment system",
+  start_date="2026-03-05",
+  end_date="2026-03-18",
+  capacity_hours=120
+)
+
+# Start sprint
+manage_sprint(action="update", sprint_id="sprint-001", status="active")
+
+# Check capacity
+get_sprint_capacity(sprint_id="sprint-001")
+
+# Assign task to sprint
+assign_task_to_sprint(task_id="task-123", sprint_id="sprint-001")
+
+# Complete sprint
+manage_sprint(action="update", sprint_id="sprint-001", status="completed")
+```
+
+**Knowledge base tools:**
+```python
+# See all indexed documentation
+rag_get_available_sources()
+
+# Search documentation semantically
+rag_search_knowledge_base(query="React Query stale time", match_count=5)
+
+# Search for code examples
+rag_search_code_examples(query="FastAPI dependency injection", match_count=3)
+
+# Browse a documentation source by page
+rag_list_pages_for_source(source_id="src-abc123")
+
+# Read a full documentation page
+rag_read_full_page(page_id="page-123")
+```
+
+**HIGHLIGHT:** "14 tools, zero browser required. A developer can run an entire sprint from their terminal — create it, populate it, start it, check capacity, complete it — all without opening a browser."
 
 ---
 
-### Scene 13: Security & Permissions (2 minutes)
+### SCENE 22 — Knowledge Base (RAG System)
 
-**SAY:** "Let me show you our enterprise-grade security system."
+**SAY:** "The Coding Agent doesn't just have access to OpenAI — it has access to YOUR documentation. Index your codebase docs and the agent uses them when executing tasks."
 
-**EXPLAIN 4-Layer Defense:**
+**DO — Navigate to Knowledge Base in the UI:**
+
+1. Click **Knowledge Base** in the sidebar
+2. Click **"Crawl Website"**
+3. Enter URL: your documentation site URL
+4. Set depth: 3
+5. Click **Crawl**
+
+**SEE:** Progress indicator shows pages being indexed. Each page becomes a searchable vector chunk in the database.
+
+**DO — Search the knowledge base:**
+
+```python
+rag_search_knowledge_base(query="authentication JWT token", match_count=5)
+```
+
+**SEE:** Returns semantically relevant chunks from your indexed docs.
+
+**DO — Show code example search:**
+
+```python
+rag_search_code_examples(query="FastAPI middleware", match_count=3)
+```
+
+**SEE:** Returns actual code snippets extracted from your documentation.
+
+**HIGHLIGHT:** "The Coding Agent automatically calls this search when executing tasks. It grounds its responses in your actual codebase documentation — not hallucinations."
+
+---
+
+### SCENE 23 — Complete the Sprint (Velocity Recorded)
+
+**SAY:** "Sprint completion triggers automatic velocity recording. No manual log — it happens the moment you close the sprint."
+
+**DO — Move all remaining tasks to Done, then complete the sprint:**
+
+```python
+manage_sprint(action="update", sprint_id="sprint-001", status="completed")
+```
+
+**SEE:**
+- Sprint status changes to "completed"
+- `archon_velocity_history` receives a new row automatically:
+  ```json
+  {
+    "project_id": "proj-abc123",
+    "sprint_id": "sprint-001",
+    "sprint_name": "Foundation Sprint",
+    "story_points_completed": 13,
+    "tasks_completed": 4,
+    "sprint_duration_days": 14
+  }
+  ```
+- All project members receive notification: "Foundation Sprint completed — 13 story points delivered"
+- Velocity chart in Analytics tab updates
+
+**HIGHLIGHT:** "One call to complete the sprint. Velocity history auto-populated. Next sprint's capacity planning will use this velocity data."
+
+---
+
+### SCENE 24 — Security Architecture
+
+**SAY:** "Four independent layers of security. Even if you bypass the UI, the API rejects you. Even if you forge the API call, the database rejects it."
+
+**DO — Show the 4-layer diagram:**
 
 ```
 Layer 1: UI
-  ↓ Hides unauthorized features
-Layer 2: API  ↓ Permission middleware checks
-Layer 3: Service Layer
-  ↓ Business logic validation
-Layer 4: Database (RLS)
-  ↓ PostgreSQL row-level security
+    → Hides buttons based on user role
+    → Greys out unavailable actions
+
+Layer 2: API Permission Middleware
+    → Every route checks: can this user do this action?
+    → 72 permission rules, every resource + action combination
+
+Layer 3: Service Business Logic
+    → WIP limits (max 3 in-progress per person)
+    → Status transition validation
+    → Dependency enforcement
+    → human_only: true on approve, delete, grant-role
+       (agents can NEVER call these — hardcoded)
+
+Layer 4: Database Row-Level Security (RLS)
+    → PostgreSQL RLS policies on every table
+    → Even direct DB access blocked for unauthorized roles
 ```
 
-**DEMO Permission Enforcement:**
-
-1. Show permission matrix:
-```sql
-SELECT resource, action, min_role, human_only
-FROM archon_permissions
-WHERE resource = 'task'
-ORDER BY min_role;
+**Key security rules:**
 ```
-
-**SHOW:**
-- task:read → viewer (anyone can view)
-- task:create → member (contributors can create)
-- task:delete → lead (only leads can delete)
-- Certain actions marked "human_only" (AI can't do them)
-
-**SAY:** "We have 72 permission rules covering every action. An AI agent can create tasks but cannot delete them or approve work - those require human judgment."
-
----
-
-### Scene 14: Complete Feature Overview (1 minute)
-
-**RAPID FIRE through features:**
-
-1. **📊 Dashboard** → Role-based views (Admin, Manager, Lead, Member)
-2. **📈 Projects** → Multi-project management with task counts
-3. **🏃 Sprints** → Agile sprint management with capacity tracking
-4. **📋 Tasks** → Kanban boards with drag-and-drop
-5. **🔔 Notifications** → Real-time alerts for all events
-6. **🤖 AI Features** → Task estimation, sprint planning, dependency detection
-7. **📊 Analytics** → Burndown charts, velocity tracking, predictions
-8. **👥 Team** → Invite members, assign roles, manage access
-9. **🔐 Security** → 7 roles, 72 permissions, 4-layer security
-
-**SAY:** "And this is just the foundation. The system is built to scale from 5 users to 5,000."
-
----
-
-## Demo Talking Points
-
-### For Technical Executives (CTO, VP Engineering)
-
-**Architecture:**
-- "Microservices-ready architecture with FastAPI backend"
-- "PostgreSQL with pgvector for AI embeddings"
-- "React frontend with TanStack Query for optimized caching"
-- "Docker-based deployment, cloud-agnostic"
-
-**Performance:**
-- "Sub-100ms API responses with ETag caching"
-- "70% bandwidth reduction through smart caching"
-- "Real-time updates with smart polling (pauses in background)"
-- "Optimistic UI updates for instant feedback"
-
-**AI Integration:**
-- "Multi-provider AI (Claude, OpenAI, Ollama)"
-- "Prompt engineering for accurate estimations"
-- "Learning from historical sprint data"
-- "Graceful fallback to heuristics"
-
-### For Business Executives (CEO, COO)
-
-**ROI:**
-- "Reduce sprint planning time from hours to minutes"
-- "AI accuracy improves with every sprint (learning system)"
-- "Prevent burnout with capacity warnings"
-- "Predict project completion dates with 85%+ accuracy"
-
-**Scalability:**
-- "Supports multiple organizations, departments, teams"
-- "Role-based access for contractors, clients, stakeholders"
-- "API-first design for integrations"
-- "Ready for mobile app expansion"
-
-**Security:**
-- "Enterprise-grade permission system"
-- "Full audit trail (every action logged)"
-- "Row-level security in database"
-- "SOC2-ready architecture"
-
-### For Product Managers
-
-**User Experience:**
-- "Intuitive drag-and-drop interface"
-- "Real-time notifications (never miss an update)"
-- "Mobile-responsive design"
-- "Dark mode support"
-
-**Collaboration:**
-- "Invite unlimited team members"
-- "Assign tasks to humans or AI agents"
-- "Comments and discussions (coming soon)"
-- "File attachments (coming soon)"
-
-**Productivity:**
-- "AI handles estimation (saves 30% planning time)"
-- "Sprint planning in 2 clicks"
-- "Visual burndown charts"
-- "Capacity warnings prevent overload"
-
----
-
-## Advanced Demo (If Time Permits)
-
-### MCP Integration (AI IDE Access)
-
-**SAY:** "Our system integrates directly into AI coding assistants like Claude Code and Cursor."
-
-**DEMO in Claude Code:**
-
-1. **Search Knowledge Base:**
-```
-Search the 10x PM documentation for sprint planning best practices
-```
-
-**Claude Code uses:**
-```
-archon:rag_search_knowledge_base(
-  query="sprint planning best practices",
-  match_count=5
-)
-```
-
-**Returns:** Relevant documentation chunks
-
-2. **Create Task via AI:**
-```
-Create a task for implementing the user profile page,
-assign it to Sarah, mark as high priority
-```
-
-**Claude Code uses:**
-```
-archon:manage_task(
-  action="create",
-  title="Implement User Profile Page",
-  description="Create user profile UI with edit capabilities",
-  assignee="Sarah Johnson",
-  priority="high",
-  project_id="<auto-detected>"
-)
-```
-
-**RESULT:** Task created instantly from natural language
-
-3. **Get Sprint Status:**
-```
-What's the status of our current sprint?
-```
-
-**Claude Code uses:**
-```
-archon:find_tasks(
-  filter_by="status",
-  filter_value="doing"
-)
-```
-
-**Returns:** List of active tasks, sprint progress, blockers
-
-**HIGHLIGHT:** "Developers never leave their IDE. AI handles the PM overhead while they focus on coding."
-
----
-
-### Analytics Deep Dive
-
-**IF executive wants more detail on analytics:**
-
-1. **Show Sprint Burndown:**
-   - Explain ideal vs actual burndown
-   - Point out scope creep detection
-   - Show day-by-day breakdown
-
-2. **Show Velocity Trends:**
-   - Explain story points per sprint
-   - Show team acceleration over time
-   - Demonstrate capacity planning
-
-3. **Show Timeline Predictions:**
-   - "Will finish on time?" → Green/Red status
-   - Days early/late prediction
-   - Required velocity to hit deadline
-
-**QUANTIFY:**
-- "This prevents 80% of sprint failures"
-- "Teams using our analytics ship 35% faster"
-- "Deadline predictions accurate within 2 days"
-
----
-
-### Security Demo
-
-**IF security is a concern:**
-
-1. **Show Permission Matrix:**
-```sql
-SELECT * FROM archon_permissions
-ORDER BY resource, min_role;
-```
-
-**Explain:**
-- 72 granular permissions
-- Resource-based (task, sprint, project, org)
-- Action-based (create, read, update, delete)
-- Role-based (minimum role required)
-
-2. **Show Audit Log:**
-```sql
-SELECT * FROM archon_user_activity_log
-ORDER BY created_at DESC
-LIMIT 20;
-```
-
-**HIGHLIGHT:**
-- Every action logged
-- Who, what, when, where
-- Immutable audit trail
-- Compliance-ready
-
-3. **Demo Permission Enforcement:**
-- Try to delete a task as Viewer → 403 Forbidden
-- Try to assign Admin role as Manager → 403 Forbidden
-- Show error messages with clear reasoning
-
----
-
-## Closing (1 minute)
-
-### Summary Points
-
-**SAY:** "In just 15 minutes, we've seen:
-
-✅ **Complete user onboarding** (30 seconds signup → full system)
-✅ **AI-powered sprint planning** (hours of work → 2 minutes)
-✅ **Real-time collaboration** (notifications, live updates)
-✅ **Predictive analytics** (know if you'll hit deadlines)
-✅ **Enterprise security** (7 roles, 72 permissions, audit logs)
-✅ **Multi-provider AI** (Claude, OpenAI, Ollama)
-
-**This is 10x PM - making project management 10x faster, 10x smarter, 10x better.**"
-
-### Next Steps
-
-**For prospects:**
-- "We can set up a pilot for your team this week"
-- "30-day trial, unlimited users"
-- "White-glove onboarding and training"
-
-**For investors:**
-- "Unique AI-first approach in crowded PM market"
-- "Enterprise-ready with SMB pricing"
-- "Extensible platform (mobile, integrations, AI agents)"
-
----
-
-## Common Questions & Answers
-
-### Q: "How is this different from Jira/Asana/Monday?"
-
-**A:** "Three key differentiators:
-
-1. **AI-First:** Built-in AI for estimation, planning, and predictions. Competitors bolt on AI as an afterthought.
-
-2. **IDE Integration:** Developers never leave their code editor. Tasks created from natural language in Claude Code/Cursor.
-
-3. **Predictive Analytics:** We don't just show what happened - we predict what will happen and warn you in advance."
-
-### Q: "What's the pricing?"
-
-**A (if applicable):**
-- "Free tier: Up to 5 users, unlimited projects"
-- "Pro: $12/user/month - unlimited everything + AI"
-- "Enterprise: Custom pricing with SSO, dedicated support"
-
-### Q: "Can we self-host?"
-
-**A:** "Absolutely. Docker-based deployment, runs on AWS/GCP/Azure. Complete control over your data."
-
-### Q: "What about integrations?"
-
-**A:** "REST API for everything. Webhook support. MCP protocol for AI IDEs. We're building Slack, GitHub, Jira import next quarter."
-
-### Q: "How accurate is the AI?"
-
-**A:** "After 3 sprints, estimation accuracy typically reaches 85-90%. The AI learns from YOUR team's patterns, not generic data."
-
-### Q: "What if AI goes down?"
-
-**A:** "Graceful fallback to heuristics. System never stops working. You can also use multiple providers with automatic failover."
-
----
-
-## Post-Demo Follow-Up
-
-### Immediately After Demo
-
-1. **Send invite link** to demo attendee
-2. **Give them test account** to explore
-3. **Share documentation** link
-4. **Schedule follow-up** (if interested)
-
-### Demo Environment Cleanup
-
-```sql
--- Reset for next demo
-DELETE FROM archon_tasks;
-DELETE FROM archon_sprints;
-DELETE FROM archon_projects;
--- Keep users for testing
+• Owner: full access to everything
+• Admin: manage team, cannot delete org
+• Manager: manage projects they are member of
+• Lead: manage tasks in their projects
+• Member: create/update tasks assigned to them
+• Viewer: read-only
+• AI Agent: can post comments, update task status
+            CANNOT approve own work (human_only enforced)
+            CANNOT grant roles
+            CANNOT delete projects
 ```
 
 ---
 
-## Demo Success Metrics
+### SCENE 25 — Admin Dashboard Deep Dive
 
-**Good demo if prospect:**
-- ✅ Asks about pricing
-- ✅ Requests trial
-- ✅ Asks technical questions
-- ✅ Wants to see specific features
-- ✅ Discusses their use case
+**SAY:** "Complete organizational visibility. Every metric a stakeholder needs, live."
 
-**Great demo if:**
-- 🎯 Asks for pilot program
-- 🎯 Introduces to decision maker
-- 🎯 Requests custom demo for team
-- 🎯 Asks about implementation timeline
+**DO — Navigate to the Admin Dashboard:**
 
----
+**SEE — Dashboard sections:**
 
-## Backup Demo (If Live Demo Fails)
-
-**Have ready:**
-- Screenshots of each screen
-- Pre-recorded video walkthrough
-- Slide deck with key features
-- Prepared Loom video
-
-**Never wing it!** Always have backup.
-
----
-
-## Demo Checklist
-
-**1 Hour Before:**
-- [ ] Clean database
-- [ ] Clear browser
-- [ ] Test all services running
-- [ ] Test AI providers working
-- [ ] Test email sending
-- [ ] Prepare demo account credentials
-- [ ] Have backup screenshots ready
-
-**5 Minutes Before:**
-- [ ] Close unnecessary tabs
-- [ ] Full-screen browser
-- [ ] Check internet connection
-- [ ] Mute notifications
-- [ ] Have water ready
-- [ ] Breathe! 😊
-
-**During Demo:**
-- [ ] Speak clearly and slowly
-- [ ] Pause for questions
-- [ ] Show, don't just tell
-- [ ] Highlight unique features
-- [ ] Address pain points
-- [ ] End with call-to-action
-
-**After Demo:**
-- [ ] Thank attendees
-- [ ] Ask for feedback
-- [ ] Send follow-up email
-- [ ] Schedule next steps
-
----
-
-## Conclusion
-
-**This demo showcases:**
-- 🚀 Modern, AI-powered PM platform
-- 🎯 Complete workflow from signup to analytics
-- 🤖 Unique AI integration
-- 📊 Predictive insights
-- 🔐 Enterprise security
-- 👥 Team collaboration
-
-**In 15 minutes, you've demonstrated a system that took months to build.**
-
-**Go crush that demo!** 🎉
-
----
-
-**Questions about the demo?** Practice it 2-3 times before the real thing!
 ```
+ORGANIZATION OVERVIEW
+Members: 3 total
+  ● Owner:   1  (Sarah Johnson)
+  ● Lead:    1  (John Doe)
+  ● Member:  1  (...)
+
+Projects: 1 active
+  → Mobile App Redesign Q1 2026
+
+Tasks by Status:
+  Backlog: 0    Todo: 0    Doing: 0    Review: 0    Done: 4
+
+Sprints:
+  Total: 1  |  Active: 0  |  Completed: 1
+
+Pending Invitations: 0
+```
+
+**HIGHLIGHT:** "Role-aware dashboards. Owners see org-wide stats. Managers see their team. Leads see their project. Members see their own work."
+
+---
+
+## AGENT HEALTH CHECKS
+
+Run these if anything seems off.
+
+### CHECK 1 — Agents container running?
+
+```bash
+docker ps --filter name=10x-agents --format "{{.Names}} {{.Status}}"
+```
+
+PASS: `10x-agents  Up X minutes (healthy)`
+FAIL: No output → `docker compose --profile agents up -d`
+
+### CHECK 2 — Coding Agent initialized?
+
+```bash
+docker logs 10x-agents 2>&1 | grep -E "coding|Initialized|OPENAI"
+```
+
+PASS: `INFO: Initialized coding agent with model: openai:gpt-4o-mini`
+FAIL: `Failed to initialize` → Check Settings → Credentials → OPENAI_API_KEY
+
+### CHECK 3 — Dispatcher running and finding tasks?
+
+```bash
+docker logs 10x-server 2>&1 | grep -E "dispatcher|claimed|pending" | tail -10
+```
+
+PASS (running): `Task dispatcher started — polling every 30s`
+PASS (found): `Task dispatcher: found 2 pending agent task(s)`
+FAIL (silent): Sees "found" but never "claimed" → Run STEP 1 SQL (trigger fix)
+
+### CHECK 4 — Quick end-to-end agent test
+
+```bash
+# Create test task via curl (or MCP)
+curl -s -X POST http://localhost:8181/api/projects/<PROJECT_ID>/tasks \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AGENT TEST: Summarize this project in 3 bullet points",
+    "description": "Write a 3-bullet summary of the 10x PM project.",
+    "priority": "high",
+    "assignee": "Coding Agent"
+  }' | python -m json.tool
+```
+
+Watch status cycle:
+```
+T+0s   → backlog  (just created)
+T+30s  → doing    (dispatcher claimed)
+T+2min → review   (agent completed)
+```
+
+```bash
+# Watch in real-time
+docker logs -f 10x-server 2>&1 | grep -E "dispatcher|claimed|pending"
+```
+
+### AGENT TROUBLESHOOTING TABLE
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Task never leaves backlog | Agents container not running | `docker compose --profile agents up -d` |
+| Task never leaves backlog | COALESCE trigger bug | Run STEP 1 SQL in Supabase |
+| Task → doing, then stuck | OpenAI key missing/invalid | Settings → Credentials → OPENAI_API_KEY |
+| Task → doing, then stuck | Agents service error | `docker logs 10x-agents \| grep ERROR` |
+| Kanban drag gives 500 | COALESCE trigger bug | Run STEP 1 SQL in Supabase |
+| Agent comment has wrong author | Agent system users not seeded | Restart server (auto-seeds on boot) |
+| "coding agent not available" | CodingAgent init failed | `docker compose restart agents` |
+| UI doesn't update after MCP | TanStack Query cache (30s) | Wait 30s or press F5 |
+| 404 on /sprints/active | No active sprint (correct!) | Start a sprint via UI or MCP |
+
+---
+
+## COMPLETE FEATURE CHECKLIST
+
+### Authentication & Organization
+- [x] User signup with email/password
+- [x] Organization creation on first signup
+- [x] JWT-based session management
+- [x] 7-level role hierarchy (Owner/Admin/Manager/Lead/Member/Viewer/Agent)
+- [x] Email invitations (role-scoped — can't grant equal or above own role)
+- [x] Invitation acceptance flow with token
+- [x] Role-aware dashboards (different view per role)
+
+### Project Management
+- [x] Create / update / delete projects
+- [x] Project documents (create, version, restore)
+- [x] Project pinning to top
+- [x] GitHub repo linking
+- [x] Version snapshots (restore any field to any version)
+
+### Task Management
+- [x] 5-stage lifecycle: backlog → todo → doing → review → done
+- [x] Stage transition validation (server enforced)
+- [x] `started_at` auto-stamped on → doing
+- [x] `completed_at` auto-stamped on → done
+- [x] Status history (every transition logged to `archon_task_status_history`)
+- [x] WIP limits (max 3 in-progress per person)
+- [x] Priority: critical / high / medium / low
+- [x] Story points (Fibonacci: 1, 2, 3, 5, 8, 13)
+- [x] Estimated hours / actual hours
+- [x] Due dates
+- [x] Tags (multi-tag, filterable)
+- [x] Reviewer assignment
+- [x] Parent task / subtask hierarchy
+- [x] Archived tasks (soft delete)
+- [x] Task comments with @mentions
+- [x] Task dependencies (blocking relationships)
+- [x] Circular dependency detection (DFS algorithm)
+- [x] Dependency enforcement on status transitions
+- [x] Priority filter (board and table views)
+- [x] Kanban board (5 columns, drag-and-drop)
+- [x] Table view (inline editing, row reorder)
+
+### Sprint Management
+- [x] Sprint CRUD (planning → active → completed/cancelled)
+- [x] Capacity hours per sprint
+- [x] Task assignment to sprints
+- [x] Active sprint tracking
+- [x] Sprint capacity summary (story points, hours, utilization%)
+- [x] Burndown chart (ideal vs actual)
+- [x] Velocity chart (trend over sprints)
+- [x] Velocity auto-recorded on sprint completion
+- [x] Team performance metrics
+- [x] Sprint notifications (started/completed)
+
+### AI Agent System ★
+- [x] Task Dispatcher (asyncio background task, 30s poll)
+- [x] Picks up both `backlog` and `todo` tasks assigned to agents
+- [x] Optimistic lock on task claim (no double-pickup)
+- [x] Coding Agent (PydanticAI, configurable model)
+- [x] Agent searches knowledge base during task execution
+- [x] Agent output posted as comment with attribution
+- [x] Acknowledgement records with confidence score
+- [x] Human supervisor approval required (human_only enforced)
+- [x] Quality scores stored on approval
+- [x] Rejection flow (returns to doing with feedback)
+- [x] Global agent system users (auto-seeded on every boot)
+- [x] Multi-agent support (Coding Agent, Archon, RAG Agent)
+- [x] Full agent execution logs
+
+### Analytics
+- [x] Sprint burndown chart
+- [x] Velocity trend chart
+- [x] Sprint capacity card
+- [x] Team performance metrics
+- [x] Sprint timeline
+- [x] `sprint_capacity_summary` SQL view
+- [x] `project_velocity_summary` SQL view
+- [x] Admin dashboard org-wide stats
+
+### Notifications
+- [x] Real-time notification count (bell badge)
+- [x] Notification panel with all events
+- [x] Mark individual notification as read
+- [x] Mark all as read
+- [x] Delete notification
+- [x] Click-to-navigate (goes to relevant task/sprint)
+- [x] 12+ event types covered
+
+### MCP Integration (AI IDE)
+- [x] `find_projects` — list, search, get one
+- [x] `manage_project` — create, update, delete
+- [x] `find_tasks` — list, filter by status/project/assignee, get one
+- [x] `manage_task` — create, update, delete
+- [x] `find_task_dependencies` — by task or project
+- [x] `manage_task_dependency` — add, remove
+- [x] `find_documents` — project documents
+- [x] `manage_document` — CRUD documents
+- [x] `find_sprints` — list, filter by status
+- [x] `manage_sprint` — create, update, delete
+- [x] `get_sprint_capacity` — sprint metrics
+- [x] `assign_task_to_sprint` — task assignment
+- [x] `rag_search_knowledge_base` — semantic doc search
+- [x] `rag_search_code_examples` — code snippet search
+- [x] `rag_get_available_sources` — list indexed sources
+- [x] `rag_list_pages_for_source` — browse documentation
+- [x] `rag_read_full_page` — full page content
+- [x] Works in Claude Code, Cursor, Windsurf
+
+### Knowledge Base
+- [x] Web crawling with depth control
+- [x] Document upload (PDF, markdown, text)
+- [x] pgvector embeddings
+- [x] Semantic search
+- [x] Code example extraction
+- [x] Source management (update, delete, refresh)
+- [x] Crawl progress tracking
+
+### Security
+- [x] 4-layer defense (UI → API → Service → Database)
+- [x] 72 permission rules
+- [x] Row-Level Security in PostgreSQL
+- [x] `human_only` flag (agents cannot approve/delete/grant roles)
+- [x] WIP limit enforcement at service layer
+- [x] Full audit log (`archon_user_activity_log`)
+- [x] JWT authentication with role extraction
+
+### Infrastructure
+- [x] 4 Docker services (server, mcp, agents, frontend)
+- [x] ETag caching (~70% bandwidth reduction on cached routes)
+- [x] TanStack Query smart polling (pauses in background tab)
+- [x] Optimistic UI updates (instant feedback)
+- [x] Request deduplication (no duplicate API calls)
+- [x] Multi-AI provider support (OpenAI, Anthropic, Ollama, Google)
+
+---
+
+## 30-MINUTE DEMO CHECKLIST
+
+### 30 Minutes Before
+- [ ] `docker compose --profile agents up -d` (all 4 containers)
+- [ ] Run STEP 1 SQL in Supabase SQL Editor (trigger fix)
+- [ ] `docker logs 10x-agents | grep "coding agent"` — verify initialized
+- [ ] `docker logs 10x-server | grep "dispatcher"` — verify started
+- [ ] Browser: http://localhost:3737 loads correctly
+- [ ] (Optional) Clean the database for a fresh demo
+
+### 5 Minutes Before
+- [ ] Two terminals open: one for server logs, one for commands
+- [ ] Browser at http://localhost:3737 on the login page
+- [ ] Demo credentials written down: sarah@acmecorp.com / SecurePass123!
+- [ ] MCP connected in Claude Code
+
+### During Demo — Watch for These
+- [ ] When agent task is created → start timer out loud
+- [ ] When "claimed" appears in terminal → call it out
+- [ ] Show the logs on screen — audiences love seeing the proof
+- [ ] Point out "zero human clicks" triggered the agent pipeline
+- [ ] After task reaches Review → show the comment with actual agent output
+- [ ] Emphasize: agent cannot approve its own work
+
+---
+
+## SUMMARY — EVERYTHING BUILT
+
+| Component | Details |
+|-----------|---------|
+| Database | 41 tables, pgvector, 3 analytics views, 15+ triggers |
+| Backend API | 114 REST endpoints, permission middleware, ETag caching |
+| MCP Tools | 17 tools, works in any AI IDE |
+| Task Lifecycle | 5 stages, transition validation, auto-timestamps |
+| Task Dependencies | Blocking relationships, circular detection |
+| WIP Limits | Max 3 in-progress per person, server enforced |
+| Sprint System | Planning, capacity, burndown, velocity auto-recording |
+| AI Agent System | Background dispatch every 30s, executes and posts output |
+| Task Dispatcher | Asyncio polling, optimistic lock, picks up backlog + todo |
+| Agent Identity | Global system users, auto-seeded on every boot |
+| Human Oversight | Approval required, quality scores, rejection flow |
+| Knowledge Base | Web crawler, pgvector search, code extraction |
+| Analytics | Burndown, velocity trends, team performance |
+| Notifications | 12+ event types, smart polling, click-to-navigate |
+| Team Management | 7 roles, email invitations, role-scoped grants |
+| Security | 4 layers, 72 permissions, PostgreSQL RLS, human_only |
+
+---
+
+```
+localhost:3737 (UI)  |  :8181 (API)  |  :8051 (MCP)  |  :8052 (Agents)
+```
+
+*Version 4.0 — Full Feature Coverage*

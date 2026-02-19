@@ -90,30 +90,51 @@ export interface Task {
   featureColor?: string;
 }
 
+// Task dependency type
+export interface TaskDependency {
+  id: string;
+  task_id: string;
+  depends_on_id: string;
+  dependency_type: "blocks";
+  depends_on_title?: string;
+  depends_on_status?: string;
+  created_at: string;
+}
+
 // Request types
 export interface CreateTaskRequest {
   project_id: string;
   title: string;
   description: string;
   status?: DatabaseTaskStatus;
-  assignee?: Assignee; // Optional assignee string
+  assignee?: Assignee;
   task_order?: number;
   feature?: string;
   featureColor?: string;
   priority?: TaskPriority;
   sources?: TaskSource[];
   code_examples?: TaskCodeExample[];
+  story_points?: number | null;
+  due_date?: string | null;
+  reviewer_id?: string | null;
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
 }
 
 export interface UpdateTaskRequest {
   title?: string;
   description?: string;
   status?: DatabaseTaskStatus;
-  assignee?: Assignee; // Optional assignee string
+  assignee?: Assignee;
   task_order?: number;
   feature?: string;
   featureColor?: string;
   priority?: TaskPriority;
   sources?: TaskSource[];
   code_examples?: TaskCodeExample[];
+  story_points?: number | null;
+  due_date?: string | null;
+  reviewer_id?: string | null;
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
 }

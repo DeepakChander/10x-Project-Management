@@ -65,15 +65,33 @@ class NotificationService:
         if notification_type not in self.VALID_TYPES:
             raise ValueError(f"Invalid notification type: {notification_type}")
 
+        def _is_valid_uuid(value: Optional[str]) -> bool:
+            if not value:
+                return False
+            import uuid as _uuid
+            try:
+                _uuid.UUID(str(value))
+                return True
+            except (ValueError, AttributeError):
+                return False
+
+        # Sanitize UUID fields — non-UUID strings (e.g. "system", "User") become None
+        safe_actor_id = actor_id if _is_valid_uuid(actor_id) else None
+        safe_user_id = user_id if _is_valid_uuid(user_id) else None
+
+        if not safe_user_id:
+            logger.warning(f"Skipping notification: user_id '{user_id}' is not a valid UUID")
+            raise ValueError(f"Invalid user_id for notification: {user_id}")
+
         notification_data = {
-            "user_id": user_id,
+            "user_id": safe_user_id,
             "type": notification_type,
             "title": title,
             "message": message,
             "project_id": project_id,
             "task_id": task_id,
             "sprint_id": sprint_id,
-            "actor_id": actor_id,
+            "actor_id": safe_actor_id,
             "metadata": metadata or {},
         }
 
@@ -90,6 +108,21 @@ class NotificationService:
                 raise Exception("Failed to create notification")
 
         except Exception as e:
+            # If actor_id FK violation, retry without actor_id
+            error_str = str(e)
+            if "actor_id" in error_str and ("foreign key" in error_str.lower() or "23503" in error_str):
+                logger.warning(f"actor_id FK violation, retrying without actor_id: {safe_actor_id}")
+                notification_data["actor_id"] = None
+                try:
+                    response = self.client.table("archon_notifications").insert(notification_data).execute()
+                    if response.data:
+                        logger.info(
+                            f"Notification created (no actor): type={notification_type} user={user_id}"
+                        )
+                        return response.data[0]
+                except Exception as retry_err:
+                    logger.error(f"Retry also failed: {retry_err}", exc_info=True)
+                    raise retry_err
             logger.error(f"Failed to create notification: {e}", exc_info=True)
             raise
 

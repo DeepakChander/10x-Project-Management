@@ -160,6 +160,14 @@ class SprintService:
                     team_member_ids=member_ids,
                 )
 
+            # Record velocity when sprint completes
+            if updated_sprint["status"] == "completed":
+                try:
+                    from ..analytics_service import AnalyticsService
+                    AnalyticsService(self.client).record_sprint_completion(sprint_id)
+                except Exception as e:
+                    logger.warning(f"Failed to record sprint completion analytics: {e}")
+
         return updated_sprint
 
     def delete_sprint(self, sprint_id: str) -> bool:
