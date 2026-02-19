@@ -61,6 +61,8 @@ export async function callAPIWithETag<T = unknown>(endpoint: string, options: Re
     // Add auth headers for permission system
     const userId = localStorage.getItem('10x-user-id') || '00000000-0000-0000-0000-000000000001';
     headers['X-User-Id'] = userId;
+    const sessionToken = localStorage.getItem('10x-session-token');
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
     const orgId = localStorage.getItem('10x-org-id');
     if (orgId) headers['X-Org-Id'] = orgId;
 

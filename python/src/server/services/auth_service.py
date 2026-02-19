@@ -292,8 +292,23 @@ class AuthService:
 
             logger.info(f"User logged in | user={user['id']} | email={email} | role={actual_role}")
 
+            # Fetch org name so the frontend can display it without an extra round-trip
+            org_name = None
+            if membership:
+                try:
+                    org_resp = self.client.table("archon_organizations").select("name").eq("id", membership["org_id"]).limit(1).execute()
+                    if org_resp.data:
+                        org_name = org_resp.data[0]["name"]
+                except Exception as e:
+                    logger.warning(f"Could not fetch org name: {e}")
+
             return {
-                "user": {**user, "org_role": actual_role, "org_id": membership["org_id"] if membership else None},
+                "user": {
+                    **user,
+                    "org_role": actual_role,
+                    "org_id": membership["org_id"] if membership else None,
+                    "org_name": org_name,
+                },
                 "session_token": session_token,
             }
 

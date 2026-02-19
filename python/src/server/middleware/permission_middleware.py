@@ -19,18 +19,41 @@ logger = logging.getLogger(__name__)
 
 async def get_current_user_id(
     x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+    x_session_token: Optional[str] = Header(None, alias="X-Session-Token"),
 ) -> str:
     """
-    Extract the current user ID from request headers.
+    Extract and validate the current user ID from request headers.
 
-    In production, this would validate a JWT token. For beta/development,
-    the user ID is passed via X-User-Id header.
+    Requires X-User-Id. When X-Session-Token is also provided, validates
+    it against active sessions in the database to prevent session forgery.
+    Agent and internal calls that omit X-Session-Token are allowed through
+    with only the user ID check.
     """
     if not x_user_id:
         raise HTTPException(
             status_code=401,
             detail="Authentication required. Provide X-User-Id header.",
         )
+
+    if x_session_token:
+        try:
+            from ..utils import get_supabase_client
+            client = get_supabase_client()
+            session_resp = (
+                client.table("archon_user_sessions")
+                .select("user_id")
+                .eq("session_token", x_session_token)
+                .execute()
+            )
+            if not session_resp.data:
+                raise HTTPException(status_code=401, detail="Invalid or expired session. Please log in again.")
+            if session_resp.data[0]["user_id"] != x_user_id:
+                raise HTTPException(status_code=401, detail="Session token does not match user.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Session validation error (non-blocking): {e}")
+
     return x_user_id
 
 

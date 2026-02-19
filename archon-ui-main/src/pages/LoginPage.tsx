@@ -59,7 +59,7 @@ export function LoginPage() {
         email: user.email,
         display_name: user.display_name,
         org_id: user.org_id || null,
-        org_name: "",
+        org_name: user.org_name || "",
         role: user.org_role || null,
         email_verified: user.email_verified ?? false,
       });

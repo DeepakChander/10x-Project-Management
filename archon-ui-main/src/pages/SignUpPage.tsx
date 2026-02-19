@@ -5,11 +5,13 @@
 import { Building, Lock, Mail, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Button } from "../features/ui/primitives/button";
 import { Input } from "../features/ui/primitives/input";
 
 export function SignUpPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
 
@@ -60,15 +62,16 @@ export function SignUpPage() {
 
       const data = await response.json();
 
-      // Save user session
-      localStorage.setItem("10x-user-id", data.user.id);
-      localStorage.setItem("10x-user-name", data.user.display_name);
-      localStorage.setItem("10x-user-email", data.user.email);
-      localStorage.setItem("10x-user-role", "owner");
-      if (data.organization) {
-        localStorage.setItem("10x-org-id", data.organization.id);
-        localStorage.setItem("10x-org-name", data.organization.name);
-      }
+      // Update auth context (also persists to localStorage)
+      login({
+        id: data.user.id,
+        email: data.user.email,
+        display_name: data.user.display_name,
+        org_id: data.organization?.id || null,
+        org_name: data.organization?.name || "",
+        role: "owner",
+        email_verified: false,
+      });
 
       // Only redirect if successful
       navigate("/dashboard");

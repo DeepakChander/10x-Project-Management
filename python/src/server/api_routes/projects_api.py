@@ -106,7 +106,7 @@ class CreateTaskRequest(BaseModel):
     due_date: str | None = None
     estimated_hours: float | None = None
     actual_hours: float | None = None
-    created_by: str | None = "User"
+    # created_by is set server-side from the authenticated user, not accepted from client
 
 
 @router.get("/projects")
@@ -734,38 +734,37 @@ async def list_project_tasks(
 @router.post("/tasks")
 async def create_task(
     request: CreateTaskRequest,
-    x_user_id: str = Header(None, alias="X-User-Id")
+    user_id: str = Depends(get_current_user_id),
 ):
     """Create a new task with automatic reordering.
 
     Requires: task:create permission
     """
     try:
-        # Manual permission check (project_id is in request body)
-        if x_user_id:
-            from ..services.permission_service import PermissionService
+        # Permission check using the authenticated user (project_id is in request body)
+        from ..services.permission_service import PermissionService
 
-            permission_service = PermissionService()
-            perm_result = permission_service.check_permission(
-                user_id=x_user_id,
-                project_id=request.project_id,
-                resource="task",
-                action="create",
+        permission_service = PermissionService()
+        perm_result = permission_service.check_permission(
+            user_id=user_id,
+            project_id=request.project_id,
+            resource="task",
+            action="create",
+        )
+
+        if not perm_result["allowed"]:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "Permission denied",
+                    "resource": "task",
+                    "action": "create",
+                    "reason": perm_result["reason"],
+                    "effective_role": perm_result.get("effective_role"),
+                },
             )
 
-            if not perm_result["allowed"]:
-                raise HTTPException(
-                    status_code=403,
-                    detail={
-                        "error": "Permission denied",
-                        "resource": "task",
-                        "action": "create",
-                        "reason": perm_result["reason"],
-                        "effective_role": perm_result.get("effective_role"),
-                    },
-                )
-
-        # Use TaskService to create the task
+        # Use TaskService to create the task; created_by always comes from the authenticated user
         task_service = TaskService()
         success, result = await task_service.create_task(
             project_id=request.project_id,
@@ -778,7 +777,7 @@ async def create_task(
             reviewer_id=request.reviewer_id,
             story_points=request.story_points,
             due_date=request.due_date,
-            created_by=request.created_by or "User",
+            created_by=user_id,
         )
 
         if not success:
