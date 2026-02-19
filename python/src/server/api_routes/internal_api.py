@@ -57,6 +57,23 @@ async def internal_health():
     return {"status": "healthy", "service": "internal-api"}
 
 
+@router.get("/active-session")
+async def get_active_session() -> dict[str, Any]:
+    """
+    Return the currently logged-in user ID from the credential store.
+
+    MCP tools call this to verify a human has logged in via the UI.
+    """
+    try:
+        user_id = await credential_service.get_credential("ACTIVE_USER_ID", decrypt=False)
+        if not user_id:
+            return {"valid": False, "user_id": None}
+        return {"valid": True, "user_id": user_id}
+    except Exception as e:
+        logger.error(f"Error reading active session: {e}")
+        return {"valid": False, "user_id": None}
+
+
 @router.get("/credentials/agents")
 async def get_agent_credentials(request: Request) -> dict[str, Any]:
     """

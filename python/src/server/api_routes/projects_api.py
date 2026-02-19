@@ -49,6 +49,25 @@ from ..middleware.permission_middleware import (
 router = APIRouter(prefix="/api", tags=["projects"])
 
 
+def _get_user_org_id(user_id: str) -> str | None:
+    """Look up the org_id for a user from their active membership."""
+    try:
+        client = get_supabase_client()
+        response = (
+            client.table("archon_org_memberships")
+            .select("org_id")
+            .eq("user_id", user_id)
+            .eq("status", "active")
+            .limit(1)
+            .execute()
+        )
+        if response.data:
+            return response.data[0]["org_id"]
+    except Exception as e:
+        logfire.warning(f"Could not resolve org_id for user {user_id}: {e}")
+    return None
+
+
 class CreateProjectRequest(BaseModel):
     title: str
     description: str | None = None
@@ -110,8 +129,9 @@ async def list_projects(
         logfire.debug(f"Listing all projects | include_content={include_content}")
 
         # Use ProjectService to get projects with include_content parameter
+        org_id = _get_user_org_id(user_id)
         project_service = ProjectService()
-        success, result = project_service.list_projects(include_content=include_content)
+        success, result = project_service.list_projects(include_content=include_content, org_id=org_id)
 
         if not success:
             raise HTTPException(status_code=500, detail=result)
@@ -217,6 +237,13 @@ async def create_project(
 
         if success:
             logfire.info(f"Project created successfully | project_id={result['project_id']}")
+            # Tag project with user's org
+            org_id = _get_user_org_id(user_id)
+            if org_id:
+                try:
+                    get_supabase_client().table("archon_projects").update({"org_id": org_id}).eq("id", result["project_id"]).execute()
+                except Exception as e:
+                    logfire.warning(f"Failed to set org_id on project {result['project_id']}: {e}")
             return {
                 "project_id": result["project_id"],
                 "project": result.get("project"),

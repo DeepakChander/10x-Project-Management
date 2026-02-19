@@ -24,7 +24,7 @@ class ProjectService:
         """Initialize with optional supabase client"""
         self.supabase_client = supabase_client or get_supabase_client()
 
-    def create_project(self, title: str, github_repo: str = None) -> tuple[bool, dict[str, Any]]:
+    def create_project(self, title: str, github_repo: str = None, org_id: str = None) -> tuple[bool, dict[str, Any]]:
         """
         Create a new project with optional PRD and GitHub repo.
 
@@ -48,6 +48,9 @@ class ProjectService:
 
             if github_repo and isinstance(github_repo, str) and len(github_repo.strip()) > 0:
                 project_data["github_repo"] = github_repo.strip()
+
+            if org_id:
+                project_data["org_id"] = org_id
 
             # Insert project
             response = self.supabase_client.table("archon_projects").insert(project_data).execute()
@@ -73,13 +76,14 @@ class ProjectService:
             logger.error(f"Error creating project: {e}")
             return False, {"error": f"Database error: {str(e)}"}
 
-    def list_projects(self, include_content: bool = True) -> tuple[bool, dict[str, Any]]:
+    def list_projects(self, include_content: bool = True, org_id: str = None) -> tuple[bool, dict[str, Any]]:
         """
-        List all projects.
+        List projects, optionally filtered by org_id.
 
         Args:
             include_content: If True (default), includes docs, features, data fields.
                            If False, returns lightweight metadata only with counts.
+            org_id: If provided, returns only projects for that org (plus org_id IS NULL for backward compat).
 
         Returns:
             Tuple of (success, result_dict)
@@ -87,12 +91,10 @@ class ProjectService:
         try:
             if include_content:
                 # Current behavior - maintain backward compatibility
-                response = (
-                    self.supabase_client.table("archon_projects")
-                    .select("*")
-                    .order("created_at", desc=True)
-                    .execute()
-                )
+                query = self.supabase_client.table("archon_projects").select("*")
+                if org_id:
+                    query = query.eq("org_id", org_id)
+                response = query.order("created_at", desc=True).execute()
 
                 projects = []
                 for project in response.data:
@@ -111,12 +113,10 @@ class ProjectService:
             else:
                 # Lightweight response for MCP - fetch all data but only return metadata + stats
                 # FIXED: N+1 query problem - now using single query
-                response = (
-                    self.supabase_client.table("archon_projects")
-                    .select("*")  # Fetch all fields in single query
-                    .order("created_at", desc=True)
-                    .execute()
-                )
+                query = self.supabase_client.table("archon_projects").select("*")
+                if org_id:
+                    query = query.eq("org_id", org_id)
+                response = query.order("created_at", desc=True).execute()
 
                 projects = []
                 for project in response.data:

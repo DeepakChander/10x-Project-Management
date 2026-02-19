@@ -77,6 +77,46 @@ class EmailService:
             logger.error(f"Failed to send invitation email: {e}", exc_info=True)
             return False
 
+    def send_verification_email(
+        self,
+        to_email: str,
+        display_name: str,
+        token: str,
+        base_url: str,
+    ) -> bool:
+        """
+        Send email verification link to a newly registered user.
+
+        Args:
+            to_email: Recipient email address
+            display_name: User's display name
+            token: Secure verification token
+            base_url: Application base URL (e.g. http://localhost:3737)
+
+        Returns:
+            True if sent successfully
+        """
+        try:
+            verify_link = f"{base_url}/verify-email?token={token}"
+            subject = "Verify your 10x PM email address"
+
+            html_body = self._build_verification_html(display_name, verify_link)
+            text_body = self._build_verification_text(display_name, verify_link)
+
+            if self.provider == "smtp":
+                return self._send_via_smtp(to_email, subject, html_body, text_body)
+            elif self.provider == "sendgrid":
+                return self._send_via_sendgrid(to_email, subject, html_body, text_body)
+            elif self.provider == "aws_ses":
+                return self._send_via_aws_ses(to_email, subject, html_body, text_body)
+            else:
+                logger.warning(f"Unknown email provider: {self.provider}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Failed to send verification email: {e}", exc_info=True)
+            return False
+
     def _send_via_smtp(
         self,
         to_email: str,
@@ -191,6 +231,62 @@ class EmailService:
         except Exception as e:
             logger.error(f"AWS SES send failed: {e}", exc_info=True)
             return False
+
+    def _build_verification_html(self, display_name: str, verify_link: str) -> str:
+        """Build HTML template for email verification."""
+        return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h1 style="color: #C0745F; font-size: 32px; margin: 0;">10x PM</h1>
+            <p style="color: #64748b; margin: 10px 0 0 0;">Project Management</p>
+        </div>
+        <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <h2 style="color: #1e293b; margin: 0 0 20px 0; font-size: 24px;">Verify your email address</h2>
+            <p style="color: #475569; line-height: 1.6; margin: 0 0 20px 0;">
+                Hi <strong>{display_name}</strong>, thanks for signing up! Click the button below to verify your email address.
+            </p>
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="{verify_link}" style="display: inline-block; background: linear-gradient(135deg, #C0745F 0%, #D4917A 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                    Verify Email
+                </a>
+            </div>
+            <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0 0; text-align: center;">
+                Or copy this link: <a href="{verify_link}" style="color: #C0745F; text-decoration: none;">{verify_link}</a>
+            </p>
+        </div>
+        <div style="text-align: center; margin-top: 32px; color: #94a3b8; font-size: 12px;">
+            <p>This link expires in 24 hours.</p>
+            <p>If you didn't create an account, you can safely ignore this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+    def _build_verification_text(self, display_name: str, verify_link: str) -> str:
+        """Build plain text template for email verification."""
+        return f"""
+Verify your 10x PM email address
+
+Hi {display_name}, thanks for signing up!
+
+Click the link below to verify your email address:
+{verify_link}
+
+This link expires in 24 hours.
+
+If you didn't create an account, you can safely ignore this email.
+
+---
+10x PM - Project Management
+"""
 
     def _build_invitation_html(
         self,

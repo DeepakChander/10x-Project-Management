@@ -25,12 +25,13 @@ from ..utils import get_supabase_client
 logger = logging.getLogger(__name__)
 
 # Agent names that trigger automatic task processing (matches task assignee field)
-AGENT_ASSIGNEES = {"Coding Agent", "Archon"}
+AGENT_ASSIGNEES = {"Coding Agent", "Archon", "10x Agent"}
 
-# Fixed UUID for the Coding Agent system user (seeded in migration 031)
+# Fixed UUIDs for system agent users
 AGENT_USER_IDS: dict[str, str] = {
     "Coding Agent": "00000000-0000-0000-0000-000000000010",
     "Archon": "00000000-0000-0000-0000-000000000011",
+    "10x Agent": "00000000-0000-0000-0000-000000000012",
 }
 
 # Polling interval in seconds
@@ -57,6 +58,10 @@ async def _call_agents_service(task: dict[str, Any]) -> str | None:
         "project_id": task.get("project_id"),
         "assignee": task.get("assignee", "Coding Agent"),
     }
+    if task.get("_user_api_key"):
+        payload["user_api_key"] = task["_user_api_key"]
+    if task.get("_user_model"):
+        payload["user_model"] = task["_user_model"]
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
@@ -158,7 +163,7 @@ async def _process_pending_agent_tasks() -> None:
 
         response = (
             client.table("archon_tasks")
-            .select("id, title, description, project_id, assignee")
+            .select("id, title, description, project_id, assignee, created_by")
             .in_("assignee", list(AGENT_ASSIGNEES))
             .in_("status", ["todo", "backlog"])  # Pick up from both backlog and todo
             .eq("archived", False)
@@ -190,6 +195,36 @@ async def _process_pending_agent_tasks() -> None:
             if not claim.data:
                 logger.debug(f"Task {task_id} already claimed by another process")
                 continue
+
+            # For "10x Agent", verify the task creator has a personal API key configured
+            if assignee == "10x Agent":
+                created_by = task.get("created_by")
+                user_key = None
+                user_model = None
+                if created_by:
+                    try:
+                        from .user_agent_config_service import UserAgentConfigService
+                        config = UserAgentConfigService().get_config(created_by)
+                        if config and config.get("enabled") and config.get("api_key"):
+                            user_key = config["api_key"]
+                            user_model = config.get("model")
+                    except Exception as cfg_err:
+                        logger.warning(f"Could not load agent config for user {created_by}: {cfg_err}")
+
+                if not user_key:
+                    # Return task to todo and post guidance comment
+                    client.table("archon_tasks").update({"status": "todo"}).eq("id", task_id).execute()
+                    client.table("archon_task_comments").insert({
+                        "task_id": task_id,
+                        "user_id": agent_user_id,
+                        "comment_text": "⚙️ **10x Agent** needs a personal LLM API key to process this task.\n\nGo to **Settings → AI Agent** to configure your API key, then reassign the task.",
+                        "mentions": [],
+                    }).execute()
+                    logger.info(f"Task {task_id} returned to todo — 10x Agent has no API key for creator {created_by}")
+                    continue
+
+                task["_user_api_key"] = user_key
+                task["_user_model"] = user_model
 
             logger.info(f"Task dispatcher: claimed '{task['title']}' → dispatching to {assignee}")
 
@@ -248,9 +283,16 @@ def _ensure_agent_users() -> None:
                 "user_type": "agent",
                 "status": "active",
             },
+            {
+                "id": AGENT_USER_IDS["10x Agent"],
+                "email": "10x-agent@system.internal",
+                "display_name": "10x Agent",
+                "user_type": "agent",
+                "status": "active",
+            },
         ]
         client.table("archon_users_profile").upsert(agent_users, on_conflict="id").execute()
-        logger.info("Agent system users verified/created (Coding Agent, Archon)")
+        logger.info("Agent system users verified/created (Coding Agent, Archon, 10x Agent)")
     except Exception as e:
         logger.warning(f"Could not ensure agent users exist: {e}")
 

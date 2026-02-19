@@ -43,6 +43,7 @@ from .api_routes.providers_api import router as providers_router
 from .api_routes.roles_api import router as roles_router
 from .api_routes.sprints_api import router as sprints_router
 from .api_routes.version_api import router as version_router
+from .api_routes.user_agent_api import router as user_agent_router
 
 # Import modular API routers
 from .api_routes.settings_api import router as settings_router
@@ -228,6 +229,7 @@ app.include_router(api_keys_router)
 app.include_router(admin_dashboard_router)
 app.include_router(comments_router)
 app.include_router(agent_workflow_router)
+app.include_router(user_agent_router)
 
 
 # Root endpoint

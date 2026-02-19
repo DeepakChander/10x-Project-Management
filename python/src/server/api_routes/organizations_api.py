@@ -68,6 +68,25 @@ def _get_org_id_from_team(team_id: str) -> str:
     return _get_org_id_from_dept(response.data[0]["department_id"])
 
 
+# ── Memberships (current user) ──────────────────────────────────
+
+@router.get("/memberships")
+async def get_user_membership(user_id: str = Query(...)) -> dict[str, Any]:
+    """Return the active org membership for a user (role, org_id)."""
+    service = RoleService()
+    response = (
+        service.client.table("archon_org_memberships")
+        .select("org_id, org_role")
+        .eq("user_id", user_id)
+        .eq("status", "active")
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return {"org_id": None, "org_role": None}
+    return response.data[0]
+
+
 # ── User Profile ────────────────────────────────────────────────
 
 @router.post("/users")

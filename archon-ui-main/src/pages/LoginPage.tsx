@@ -2,16 +2,29 @@
  * Login Page
  */
 
-import { Lock, Mail } from "lucide-react";
+import { ChevronDown, Lock, Mail } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { Button } from "../features/ui/primitives/button";
 import { Input } from "../features/ui/primitives/input";
 
+const ROLES = [
+  { value: "", label: "Any role" },
+  { value: "owner", label: "Owner" },
+  { value: "admin", label: "Admin" },
+  { value: "manager", label: "Manager" },
+  { value: "lead", label: "Lead" },
+  { value: "member", label: "Member" },
+  { value: "viewer", label: "Viewer" },
+];
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,11 +34,13 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      // TODO: Call login API
+      const body: Record<string, string> = { email, password };
+      if (role) body.role = role;
+
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -35,13 +50,20 @@ export function LoginPage() {
 
       const { user, session_token } = await response.json();
 
-      // Save session
-      localStorage.setItem("10x-user-id", user.id);
+      // Persist session
       localStorage.setItem("10x-session-token", session_token);
-      localStorage.setItem("10x-user-name", user.display_name);
-      localStorage.setItem("10x-user-email", user.email);
 
-      // Redirect to dashboard
+      // Update auth context with full user info from server
+      login({
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        org_id: user.org_id || null,
+        org_name: "",
+        role: user.org_role || null,
+        email_verified: user.email_verified ?? false,
+      });
+
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -100,6 +122,24 @@ export function LoginPage() {
               required
               autoComplete="current-password"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 flex items-center gap-1">
+              <ChevronDown className="w-3 h-3" />
+              Role <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <Button

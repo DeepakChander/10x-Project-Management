@@ -28,6 +28,15 @@ class SignUpRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    role: str | None = None
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
 
 
 # ── Sign Up ──────────────────────────────────────────────────────
@@ -68,6 +77,7 @@ async def login(request: LoginRequest) -> dict[str, Any]:
     """
     Login with email and password.
 
+    Optionally validates role against actual org membership.
     Returns user info and session token.
     """
     try:
@@ -75,6 +85,7 @@ async def login(request: LoginRequest) -> dict[str, Any]:
         result = service.login(
             email=request.email,
             password=request.password,
+            role=request.role,
         )
 
         return {
@@ -87,6 +98,36 @@ async def login(request: LoginRequest) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         logger.error(f"Login failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Email Verification ────────────────────────────────────────────
+
+@router.post("/verify-email")
+async def verify_email(request: VerifyEmailRequest) -> dict[str, Any]:
+    """Verify user email using token from the verification link."""
+    try:
+        service = AuthService()
+        result = service.verify_email(request.token)
+        return {"message": "Email verified successfully", **result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Email verification failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/resend-verification")
+async def resend_verification(request: ResendVerificationRequest) -> dict[str, Any]:
+    """Resend email verification link for an unverified user."""
+    try:
+        service = AuthService()
+        service.resend_verification(request.email)
+        return {"message": "Verification email sent"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Resend verification failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

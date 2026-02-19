@@ -10,9 +10,10 @@ interface AuthUser {
   id: string;
   email: string;
   display_name: string;
-  org_id: string;
+  org_id: string | null;
   org_name: string;
-  role: string;
+  role: string | null;
+  email_verified: boolean;
 }
 
 interface AuthContextType {
@@ -28,12 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user from localStorage and fetch org data
+  // Load user from localStorage and fetch membership data
   useEffect(() => {
     async function loadUser() {
       const userId = localStorage.getItem("10x-user-id");
       const userName = localStorage.getItem("10x-user-name");
       const userEmail = localStorage.getItem("10x-user-email");
+      const orgId = localStorage.getItem("10x-org-id");
+      const orgName = localStorage.getItem("10x-org-name");
+      const emailVerified = localStorage.getItem("10x-email-verified") === "true";
 
       if (!userId) {
         setIsLoading(false);
@@ -41,33 +45,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        // Fetch user's organization
-        const response = await fetch(`/api/organizations?user_id=${userId}`, {
+        // Fetch org membership to get actual role
+        const response = await fetch(`/api/memberships?user_id=${userId}`, {
           headers: { "X-User-Id": userId },
         });
 
         if (response.ok) {
-          const orgs = await response.json();
-          const userOrg = orgs[0]; // First org user belongs to
-
-          if (userOrg) {
-            const authUser: AuthUser = {
-              id: userId,
-              email: userEmail || "",
-              display_name: userName || "",
-              org_id: userOrg.id,
-              org_name: userOrg.name,
-              role: "owner", // TODO: Fetch from membership
-            };
-
-            setUser(authUser);
-            // Save org to localStorage for quick access
-            localStorage.setItem("10x-org-id", userOrg.id);
-            localStorage.setItem("10x-org-name", userOrg.name);
+          const membership = await response.json();
+          setUser({
+            id: userId,
+            email: userEmail || "",
+            display_name: userName || "",
+            org_id: membership.org_id || orgId || null,
+            org_name: orgName || "",
+            role: membership.org_role || null,
+            email_verified: emailVerified,
+          });
+          if (membership.org_id) {
+            localStorage.setItem("10x-org-id", membership.org_id);
           }
+        } else {
+          // Fallback: use cached values without role
+          setUser({
+            id: userId,
+            email: userEmail || "",
+            display_name: userName || "",
+            org_id: orgId || null,
+            org_name: orgName || "",
+            role: null,
+            email_verified: emailVerified,
+          });
         }
       } catch (error) {
-        console.error("Failed to load user org:", error);
+        console.error("Failed to load user membership:", error);
+        setUser({
+          id: userId,
+          email: userEmail || "",
+          display_name: userName || "",
+          org_id: orgId || null,
+          org_name: orgName || "",
+          role: null,
+          email_verified: emailVerified,
+        });
       } finally {
         setIsLoading(false);
       }
@@ -81,8 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("10x-user-id", userData.id);
     localStorage.setItem("10x-user-name", userData.display_name);
     localStorage.setItem("10x-user-email", userData.email);
-    localStorage.setItem("10x-org-id", userData.org_id);
-    localStorage.setItem("10x-org-name", userData.org_name);
+    localStorage.setItem("10x-email-verified", String(userData.email_verified));
+    if (userData.org_id) localStorage.setItem("10x-org-id", userData.org_id);
+    if (userData.org_name) localStorage.setItem("10x-org-name", userData.org_name);
   };
 
   const logout = () => {

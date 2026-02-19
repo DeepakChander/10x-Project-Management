@@ -117,9 +117,16 @@ async def create_invitation(
     """
     Create a new invitation.
 
-    Requires: Manager role or higher
+    Requires: Manager role or higher, and email must be verified.
     """
     try:
+        # Require email verification before sending invitations
+        from ..utils import get_supabase_client
+        client = get_supabase_client()
+        user_row = client.table("archon_users_profile").select("email_verified").eq("id", user_id).execute()
+        if user_row.data and not user_row.data[0].get("email_verified"):
+            raise HTTPException(status_code=403, detail="Verify your email before inviting team members")
+
         service = InvitationService()
         invitation = service.create_invitation(
             org_id=org_id,

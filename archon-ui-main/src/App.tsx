@@ -11,9 +11,11 @@ import { TeamPage } from './pages/TeamPage';
 import { InviteAcceptPage } from './pages/InviteAcceptPage';
 import { SignUpPage } from './pages/SignUpPage';
 import { LoginPage } from './pages/LoginPage';
+import { EmailVerifyPage } from './pages/EmailVerifyPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AIPage } from './pages/AIPage';
 import { AuthGuard } from './components/auth/AuthGuard';
+import { useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -35,6 +37,7 @@ const AppRoutes = () => {
   return (
     <AuthGuard>
       <Routes>
+        <Route path="/verify-email" element={<EmailVerifyPage />} />
         <Route path="/" element={<KnowledgeBasePage />} />
         <Route path="/signup" element={<SignUpPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -62,6 +65,49 @@ const AppRoutes = () => {
     </AuthGuard>
   );
 };
+
+function EmailVerificationBanner() {
+  const { user } = useAuth();
+  const [dismissed, setDismissed] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  if (!user || user.email_verified || dismissed) return null;
+
+  const resend = async () => {
+    setResending(true);
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email }),
+      });
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[60] bg-amber-500 text-white px-4 py-2 flex items-center justify-center gap-3 text-sm shadow-md">
+      <span>Please verify your email to unlock all features.</span>
+      <button
+        type="button"
+        onClick={resend}
+        disabled={resending}
+        className="underline font-medium hover:no-underline disabled:opacity-60"
+      >
+        {resending ? "Sending..." : "Resend verification email"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setDismissed(true)}
+        className="ml-2 opacity-70 hover:opacity-100"
+        aria-label="Dismiss"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
 
 const AppContent = () => {
   const [disconnectScreenActive, setDisconnectScreenActive] = useState(false);
@@ -109,6 +155,7 @@ const AppContent = () => {
   return (
     <>
       <Router>
+        <EmailVerificationBanner />
         <ErrorBoundaryWithBugReport>
           <MainLayout>
             {/* Migration Banner - shows when backend is up but DB schema needs work */}

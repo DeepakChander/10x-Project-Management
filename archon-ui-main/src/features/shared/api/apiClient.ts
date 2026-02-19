@@ -58,10 +58,11 @@ export async function callAPIWithETag<T = unknown>(endpoint: string, options: Re
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    // Add X-User-Id header for authentication (Phase 2 permission system)
-    // In development, use a default dev user. In production, this should come from auth context.
+    // Add auth headers for permission system
     const userId = localStorage.getItem('10x-user-id') || '00000000-0000-0000-0000-000000000001';
     headers['X-User-Id'] = userId;
+    const orgId = localStorage.getItem('10x-org-id');
+    if (orgId) headers['X-Org-Id'] = orgId;
 
     // Only set Content-Type for requests that have a body (POST, PUT, PATCH, etc.)
     // GET and DELETE requests should not have Content-Type header

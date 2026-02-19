@@ -12,6 +12,7 @@ import {
   Bug,
   Info,
   Database,
+  Bot,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "../features/shared/hooks/useToast";
@@ -24,6 +25,7 @@ import { CodeExtractionSettings } from "../components/settings/CodeExtractionSet
 import { IDEGlobalRules } from "../components/settings/IDEGlobalRules";
 import { ButtonPlayground } from "../components/settings/ButtonPlayground";
 import { CollapsibleSettingsCard } from "../components/ui/CollapsibleSettingsCard";
+import { UserAgentConfigSection } from "../features/ai/components/UserAgentConfigSection";
 import { BugReportButton } from "../components/bug-report/BugReportButton";
 import {
   credentialsService,
@@ -225,6 +227,18 @@ export const SettingsPage = () => {
                 codeExtractionSettings={codeExtractionSettings}
                 setCodeExtractionSettings={setCodeExtractionSettings}
               />
+            </CollapsibleSettingsCard>
+          </motion.div>
+
+          <motion.div variants={itemVariants}>
+            <CollapsibleSettingsCard
+              title="AI Agent"
+              icon={Bot}
+              accentColor="blue"
+              storageKey="ai-agent"
+              defaultExpanded={false}
+            >
+              <UserAgentConfigSection />
             </CollapsibleSettingsCard>
           </motion.div>
 
