@@ -65,8 +65,11 @@ export function EmailVerifyPage() {
           <div className="flex flex-col items-center gap-4">
             <CheckCircle className="w-12 h-12 text-green-500" />
             <p className="text-gray-700 dark:text-gray-300">{message}</p>
-            <Button asChild className="mt-2 bg-[#C0745F] hover:bg-[#A85A45]">
-              <Link to="/dashboard">Go to Dashboard</Link>
+            <Button
+              className="mt-2 bg-[#C0745F] hover:bg-[#A85A45]"
+              onClick={() => { window.location.href = "/dashboard"; }}
+            >
+              Go to Dashboard
             </Button>
           </div>
         )}

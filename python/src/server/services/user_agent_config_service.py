@@ -19,27 +19,29 @@ from ..utils import get_supabase_client
 logger = logging.getLogger(__name__)
 
 
-def _get_fernet() -> Fernet:
-    """Build Fernet instance using the same key derivation as credential_service.py."""
+def _get_fernet_for_user(user_id: str) -> Fernet:
+    """Build a per-user Fernet instance using user_id as the derivation salt."""
     service_key = os.getenv("SUPABASE_SERVICE_KEY", "default-key-for-development")
+    # Each user gets a unique encryption key derived from their user_id as salt
+    salt = user_id.encode("utf-8")
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=b"static_salt_for_credentials",
+        salt=salt,
         iterations=100000,
     )
     key = base64.urlsafe_b64encode(kdf.derive(service_key.encode()))
     return Fernet(key)
 
 
-def _encrypt(value: str) -> str:
-    encrypted = _get_fernet().encrypt(value.encode("utf-8"))
+def _encrypt(value: str, user_id: str) -> str:
+    encrypted = _get_fernet_for_user(user_id).encrypt(value.encode("utf-8"))
     return base64.urlsafe_b64encode(encrypted).decode("utf-8")
 
 
-def _decrypt(encrypted_value: str) -> str:
+def _decrypt(encrypted_value: str, user_id: str) -> str:
     encrypted_bytes = base64.urlsafe_b64decode(encrypted_value.encode("utf-8"))
-    return _get_fernet().decrypt(encrypted_bytes).decode("utf-8")
+    return _get_fernet_for_user(user_id).decrypt(encrypted_bytes).decode("utf-8")
 
 
 class UserAgentConfigService:
@@ -66,7 +68,7 @@ class UserAgentConfigService:
         decrypted_key = None
         if row.get("api_key"):
             try:
-                decrypted_key = _decrypt(row["api_key"])
+                decrypted_key = _decrypt(row["api_key"], user_id)
             except Exception as e:
                 logger.error(f"Failed to decrypt API key for user {user_id}: {e}")
 
@@ -105,7 +107,7 @@ class UserAgentConfigService:
             "updated_at": "NOW()",
         }
         if api_key:
-            data["api_key"] = _encrypt(api_key)
+            data["api_key"] = _encrypt(api_key, user_id)
         else:
             data["api_key"] = None
 

@@ -93,7 +93,7 @@ class ProjectService:
                 # Current behavior - maintain backward compatibility
                 query = self.supabase_client.table("archon_projects").select("*")
                 if org_id:
-                    query = query.eq("org_id", org_id)
+                    query = query.or_(f"org_id.eq.{org_id},org_id.is.null")
                 response = query.order("created_at", desc=True).execute()
 
                 projects = []
@@ -115,7 +115,7 @@ class ProjectService:
                 # FIXED: N+1 query problem - now using single query
                 query = self.supabase_client.table("archon_projects").select("*")
                 if org_id:
-                    query = query.eq("org_id", org_id)
+                    query = query.or_(f"org_id.eq.{org_id},org_id.is.null")
                 response = query.order("created_at", desc=True).execute()
 
                 projects = []

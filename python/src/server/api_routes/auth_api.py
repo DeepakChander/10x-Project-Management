@@ -39,6 +39,10 @@ class ResendVerificationRequest(BaseModel):
     email: str
 
 
+class LogoutRequest(BaseModel):
+    session_token: str
+
+
 # ── Sign Up ──────────────────────────────────────────────────────
 
 @router.post("/signup")
@@ -134,13 +138,13 @@ async def resend_verification(request: ResendVerificationRequest) -> dict[str, A
 # ── Logout ───────────────────────────────────────────────────────
 
 @router.post("/logout")
-async def logout(session_token: str) -> dict[str, str]:
+async def logout(request: LogoutRequest) -> dict[str, str]:
     """
     Logout and invalidate session.
     """
     try:
         service = AuthService()
-        service.logout(session_token)
+        service.logout(request.session_token)
 
         return {"message": "Logged out successfully"}
 

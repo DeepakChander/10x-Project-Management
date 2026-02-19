@@ -71,8 +71,13 @@ def _get_org_id_from_team(team_id: str) -> str:
 # ── Memberships (current user) ──────────────────────────────────
 
 @router.get("/memberships")
-async def get_user_membership(user_id: str = Query(...)) -> dict[str, Any]:
-    """Return the active org membership for a user (role, org_id)."""
+async def get_user_membership(
+    user_id: str = Query(...),
+    current_user: str = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Return the active org membership for the authenticated user."""
+    if user_id != current_user:
+        raise HTTPException(status_code=403, detail="Cannot query another user's membership")
     service = RoleService()
     response = (
         service.client.table("archon_org_memberships")

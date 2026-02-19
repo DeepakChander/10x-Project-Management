@@ -20,7 +20,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     const userId = localStorage.getItem("10x-user-id");
 
     // Public routes that don't need auth
-    const publicRoutes = ["/signup", "/login", "/invite"];
+    const publicRoutes = ["/signup", "/login", "/invite", "/verify-email"];
 
     const isPublicRoute = publicRoutes.some((route) =>
       location.pathname.startsWith(route)

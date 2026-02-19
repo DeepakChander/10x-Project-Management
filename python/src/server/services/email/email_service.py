@@ -4,6 +4,7 @@ Email Service
 Handles sending emails with support for multiple providers
 """
 
+import html as html_module
 import logging
 import os
 from typing import Any, Optional
@@ -137,7 +138,7 @@ class EmailService:
 
             if not smtp_user or not smtp_password:
                 logger.warning("SMTP credentials not configured")
-                logger.info(f"Invitation link: {html_body}")  # Log link for dev
+                logger.info(f"Email not sent (no SMTP configured). Content:\n{text_body}")
                 return False
 
             # Create message
@@ -234,6 +235,8 @@ class EmailService:
 
     def _build_verification_html(self, display_name: str, verify_link: str) -> str:
         """Build HTML template for email verification."""
+        safe_name = html_module.escape(display_name)
+        safe_link = html_module.escape(verify_link)
         return f"""
 <!DOCTYPE html>
 <html>
@@ -250,15 +253,15 @@ class EmailService:
         <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
             <h2 style="color: #1e293b; margin: 0 0 20px 0; font-size: 24px;">Verify your email address</h2>
             <p style="color: #475569; line-height: 1.6; margin: 0 0 20px 0;">
-                Hi <strong>{display_name}</strong>, thanks for signing up! Click the button below to verify your email address.
+                Hi <strong>{safe_name}</strong>, thanks for signing up! Click the button below to verify your email address.
             </p>
             <div style="text-align: center; margin: 32px 0;">
-                <a href="{verify_link}" style="display: inline-block; background: linear-gradient(135deg, #C0745F 0%, #D4917A 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                <a href="{safe_link}" style="display: inline-block; background: linear-gradient(135deg, #C0745F 0%, #D4917A 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Verify Email
                 </a>
             </div>
             <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0 0; text-align: center;">
-                Or copy this link: <a href="{verify_link}" style="color: #C0745F; text-decoration: none;">{verify_link}</a>
+                Or copy this link: <a href="{safe_link}" style="color: #C0745F; text-decoration: none;">{safe_link}</a>
             </p>
         </div>
         <div style="text-align: center; margin-top: 32px; color: #94a3b8; font-size: 12px;">
@@ -297,8 +300,12 @@ If you didn't create an account, you can safely ignore this email.
         personal_message: Optional[str],
     ) -> str:
         """Build HTML email template"""
+        safe_inviter = html_module.escape(inviter_name)
+        safe_org = html_module.escape(org_name)
+        safe_role = html_module.escape(role.title())
+        safe_link = html_module.escape(invite_link)
         personal_msg_html = (
-            f'<p style="color: #64748b; font-style: italic; margin: 20px 0; padding: 15px; background: #f8fafc; border-left: 3px solid #C0745F;">"{personal_message}"</p>'
+            f'<p style="color: #64748b; font-style: italic; margin: 20px 0; padding: 15px; background: #f8fafc; border-left: 3px solid #C0745F;">"{html_module.escape(personal_message)}"</p>'
             if personal_message
             else ""
         )
@@ -323,7 +330,7 @@ If you didn't create an account, you can safely ignore this email.
             <h2 style="color: #1e293b; margin: 0 0 20px 0; font-size: 24px;">You've Been Invited!</h2>
 
             <p style="color: #475569; line-height: 1.6; margin: 0 0 20px 0;">
-                <strong>{inviter_name}</strong> has invited you to join <strong>{org_name}</strong> on 10x PM as a <strong style="color: #C0745F;">{role.title()}</strong>.
+                <strong>{safe_inviter}</strong> has invited you to join <strong>{safe_org}</strong> on 10x PM as a <strong style="color: #C0745F;">{safe_role}</strong>.
             </p>
 
             {personal_msg_html}
@@ -334,14 +341,14 @@ If you didn't create an account, you can safely ignore this email.
 
             <!-- CTA Button -->
             <div style="text-align: center; margin: 32px 0;">
-                <a href="{invite_link}" style="display: inline-block; background: linear-gradient(135deg, #C0745F 0%, #D4917A 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                <a href="{safe_link}" style="display: inline-block; background: linear-gradient(135deg, #C0745F 0%, #D4917A 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Accept Invitation
                 </a>
             </div>
 
             <!-- Link fallback -->
             <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0 0; text-align: center;">
-                Or copy this link: <a href="{invite_link}" style="color: #C0745F; text-decoration: none;">{invite_link}</a>
+                Or copy this link: <a href="{safe_link}" style="color: #C0745F; text-decoration: none;">{safe_link}</a>
             </p>
         </div>
 

@@ -170,6 +170,7 @@ class AuthService:
                 }
 
             # Send verification email for users without org
+            self._send_verification_email(user["id"], email, display_name)
 
             logger.info(f"User registered | user={user['id']}")
             return {"user": user, "organization": None}

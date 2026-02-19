@@ -106,6 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    const sessionToken = localStorage.getItem("10x-session-token");
+    if (sessionToken) {
+      // Fire and forget — clear local state regardless of server response
+      fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: sessionToken }),
+      }).catch((e) => console.warn("Logout API call failed:", e));
+    }
     setUser(null);
     localStorage.clear();
   };
