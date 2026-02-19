@@ -39,7 +39,7 @@ POLL_INTERVAL = 30
 
 def _get_agents_url() -> str:
     agents_port = os.getenv("ARCHON_AGENTS_PORT", "8052")
-    if os.getenv("DOCKER_CONTAINER"):
+    if os.path.exists("/.dockerenv") or os.getenv("DOCKER_CONTAINER"):
         return f"http://agents:{agents_port}"
     return f"http://localhost:{agents_port}"
 

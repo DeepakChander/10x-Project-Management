@@ -72,23 +72,35 @@ async def get_agent_credentials(request: Request) -> dict[str, Any]:
 
     try:
         # Get credentials needed by agents
+        # Determine best available model for agents based on configured providers
+        anthropic_key = await credential_service.get_credential("ANTHROPIC_API_KEY", decrypt=True)
+        openai_key = await credential_service.get_credential("OPENAI_API_KEY", decrypt=True)
+        default_agent_model = (
+            "anthropic:claude-haiku-4-5-20251001" if anthropic_key
+            else "openai:gpt-4o-mini" if openai_key
+            else "openai:gpt-4o-mini"
+        )
+
         credentials = {
-            # OpenAI credentials
-            "OPENAI_API_KEY": await credential_service.get_credential(
-                "OPENAI_API_KEY", decrypt=True
-            ),
+            # Anthropic credentials (preferred for agents)
+            "ANTHROPIC_API_KEY": anthropic_key,
+            # OpenAI credentials (fallback)
+            "OPENAI_API_KEY": openai_key,
             "OPENAI_MODEL": await credential_service.get_credential(
                 "OPENAI_MODEL", default="gpt-4o-mini"
             ),
-            # Model configurations
+            # Model configurations — CODING_AGENT_MODEL is the key used by coding agent
+            "CODING_AGENT_MODEL": await credential_service.get_credential(
+                "CODING_AGENT_MODEL", default=default_agent_model
+            ),
             "DOCUMENT_AGENT_MODEL": await credential_service.get_credential(
-                "DOCUMENT_AGENT_MODEL", default="openai:gpt-4o"
+                "DOCUMENT_AGENT_MODEL", default=default_agent_model
             ),
             "RAG_AGENT_MODEL": await credential_service.get_credential(
-                "RAG_AGENT_MODEL", default="openai:gpt-4o-mini"
+                "RAG_AGENT_MODEL", default=default_agent_model
             ),
             "TASK_AGENT_MODEL": await credential_service.get_credential(
-                "TASK_AGENT_MODEL", default="openai:gpt-4o"
+                "TASK_AGENT_MODEL", default=default_agent_model
             ),
             # Rate limiting settings
             "AGENT_RATE_LIMIT_ENABLED": await credential_service.get_credential(
