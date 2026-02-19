@@ -188,6 +188,23 @@ Respond with JSON only:
             logger.error(f"Ollama dependency detection failed: {e}", exc_info=True)
             return []
 
+    async def generate_text(self, prompt: str, max_tokens: int = 2048) -> str:
+        """Generate text from a free-form prompt using Ollama."""
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"num_predict": max_tokens},
+                },
+            )
+            if response.status_code != 200:
+                raise ValueError(f"Ollama returned {response.status_code}")
+            data = response.json()
+            return data["response"]
+
     def get_provider_name(self) -> str:
         return "ollama"
 

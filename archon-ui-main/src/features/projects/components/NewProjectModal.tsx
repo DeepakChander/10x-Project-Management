@@ -1,6 +1,7 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useId, useState } from "react";
+import { AIProjectSetupModal } from "../../ai/components/AIProjectSetupModal";
 import { Button } from "../../ui/primitives/button";
 import {
   Dialog,
@@ -30,6 +31,10 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ open, onOpenCh
     description: "",
   });
 
+  // AI setup modal state — shown after project is created
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [createdProject, setCreatedProject] = useState<{ id: string; title: string; description: string } | null>(null);
+
   const createProjectMutation = useCreateProject();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,10 +43,21 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ open, onOpenCh
     if (!formData.title.trim()) return;
 
     createProjectMutation.mutate(formData, {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        const project = response.project;
         setFormData({ title: "", description: "" });
         onOpenChange(false);
         onSuccess?.();
+
+        // Trigger AI task suggestions for the new project
+        if (project?.id) {
+          setCreatedProject({
+            id: project.id,
+            title: project.title,
+            description: project.description ?? "",
+          });
+          setAiModalOpen(true);
+        }
       },
     });
   };
@@ -54,6 +70,16 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ open, onOpenCh
   };
 
   return (
+    <>
+    {createdProject && (
+      <AIProjectSetupModal
+        open={aiModalOpen}
+        onOpenChange={setAiModalOpen}
+        projectId={createdProject.id}
+        projectTitle={createdProject.title}
+        projectDescription={createdProject.description}
+      />
+    )}
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
@@ -141,5 +167,6 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ open, onOpenCh
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 };

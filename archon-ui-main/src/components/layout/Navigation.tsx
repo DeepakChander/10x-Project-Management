@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Palette, Settings, User, Users } from "lucide-react";
+import { BookOpen, BrainCircuit, LayoutDashboard, Palette, Settings, Users } from "lucide-react";
 import type React from "react";
 import { Link, useLocation } from "react-router-dom";
 // TEMPORARY: Use old SettingsContext until settings are migrated
@@ -59,6 +59,12 @@ export function Navigation({ className }: NavigationProps) {
         </svg>
       ),
       label: "MCP Server",
+      enabled: true,
+    },
+    {
+      path: "/ai",
+      icon: <BrainCircuit className="h-5 w-5" />,
+      label: "AI Intelligence",
       enabled: true,
     },
     {

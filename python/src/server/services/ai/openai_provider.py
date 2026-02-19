@@ -173,6 +173,18 @@ Find dependencies. Respond with JSON only."""
             logger.error(f"OpenAI dependency detection failed: {e}", exc_info=True)
             return []
 
+    async def generate_text(self, prompt: str, max_tokens: int = 2048) -> str:
+        """Generate text from a free-form prompt using OpenAI."""
+        if not self.client:
+            raise ValueError("OpenAI API key not configured")
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content or ""
+
     def get_provider_name(self) -> str:
         return "openai"
 

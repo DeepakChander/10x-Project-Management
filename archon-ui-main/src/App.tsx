@@ -12,6 +12,7 @@ import { InviteAcceptPage } from './pages/InviteAcceptPage';
 import { SignUpPage } from './pages/SignUpPage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { AIPage } from './pages/AIPage';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -43,6 +44,7 @@ const AppRoutes = () => {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/mcp" element={<MCPPage />} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/ai" element={<AIPage />} />
       {styleGuideEnabled ? (
         <Route path="/style-guide" element={<StyleGuidePage />} />
       ) : (

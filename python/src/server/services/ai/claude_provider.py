@@ -202,6 +202,18 @@ Look for explicit or implicit dependencies. Keywords like "after", "requires", "
             logger.error(f"Claude dependency detection failed: {e}", exc_info=True)
             return []
 
+    async def generate_text(self, prompt: str, max_tokens: int = 2048) -> str:
+        """Generate text from a free-form prompt using Claude."""
+        if not self.client:
+            raise ValueError("Claude API key not configured")
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+
     def get_provider_name(self) -> str:
         return "claude"
 

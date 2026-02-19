@@ -79,6 +79,15 @@ class AIProvider(ABC):
         pass
 
     @abstractmethod
+    async def generate_text(self, prompt: str, max_tokens: int = 2048) -> str:
+        """
+        Generate text from a free-form prompt.
+        Returns the raw text response from the model.
+        Used for open-ended generation (task lists, project setup, etc.).
+        """
+        pass
+
+    @abstractmethod
     def get_provider_name(self) -> str:
         """Return provider name (e.g., 'claude', 'openai', 'ollama')"""
         pass

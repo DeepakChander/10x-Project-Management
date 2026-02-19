@@ -43,7 +43,34 @@ export type AISuggestionType =
   | "sprint_planning"
   | "priority_suggestion"
   | "dependency_detection"
-  | "capacity_warning";
+  | "capacity_warning"
+  | "project_setup"
+  | "task_blueprint"
+  | "team_assignment"
+  | "stall_warning"
+  | "quality_tip"
+  | "retrospective";
+
+export interface AITaskSuggestion {
+  title: string;
+  description?: string;
+  task_type: string;
+  priority: string;
+  assignee: string;
+  agent_suitable: boolean;
+  estimated_days?: number;
+}
+
+export interface AIProjectSetupSuggestion {
+  project_id: string;
+  suggestion_id: string | null;
+  confidence: number;
+  template_used: string | null;
+  suggested_tasks: AITaskSuggestion[];
+  cold_start: boolean;
+  message: string;
+  needs_description?: boolean;
+}
 
 export const aiService = {
   /**
@@ -120,6 +147,82 @@ export const aiService = {
       return suggestions;
     } catch (error) {
       console.error("Failed to get AI suggestions:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get AI learning system status
+   */
+  async getLearningStatus(): Promise<{
+    pending_observations: number;
+    knowledge_stores: Record<string, number>;
+  }> {
+    return callAPIWithETag("/api/ai/learn/status");
+  },
+
+  /**
+   * Get all team intelligence profiles
+   */
+  async getTeamProfiles(): Promise<Array<Record<string, unknown>>> {
+    return callAPIWithETag("/api/ai/team-intelligence");
+  },
+
+  /**
+   * Get quality patterns (high-rejection task types)
+   */
+  async getQualityPatterns(minRejectionRate = 0.0): Promise<Array<Record<string, unknown>>> {
+    return callAPIWithETag(`/api/ai/quality-patterns?min_rejection_rate=${minRejectionRate}`);
+  },
+
+  /**
+   * Get model accuracy over time
+   */
+  async getModelAccuracy(limit = 12): Promise<Array<Record<string, unknown>>> {
+    return callAPIWithETag(`/api/ai/accuracy?limit=${limit}`);
+  },
+
+  /**
+   * Trigger background observation processing
+   */
+  async triggerLearning(batchSize = 50): Promise<{ pending: number; message: string }> {
+    return callAPIWithETag(`/api/ai/learn?batch_size=${batchSize}`, { method: "POST" });
+  },
+
+  /**
+   * Get AI-generated task suggestions for a new project (Magic Moment)
+   */
+  async suggestProjectSetup(projectId: string, title: string, description?: string): Promise<AIProjectSetupSuggestion> {
+    try {
+      const response = await callAPIWithETag<AIProjectSetupSuggestion>(
+        `/api/ai/projects/${projectId}/suggest-setup`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title, description }),
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error(`Failed to get project setup suggestions for ${projectId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Record feedback on an AI suggestion (accept/reject/modify)
+   */
+  async recordFeedback(
+    suggestionId: string,
+    userResponse: "accepted" | "rejected" | "modified",
+    modifications?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await callAPIWithETag(`/api/ai/suggestions/${suggestionId}/feedback`, {
+        method: "POST",
+        body: JSON.stringify({ user_response: userResponse, modifications }),
+      });
+    } catch (error) {
+      console.error(`Failed to record feedback for suggestion ${suggestionId}:`, error);
       throw error;
     }
   },

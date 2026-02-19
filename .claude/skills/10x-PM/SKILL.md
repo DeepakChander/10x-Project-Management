@@ -1,11 +1,11 @@
 ---
 name: 10x-pm
-description: Complete 10x PM integration for AI-powered project management. Provides sprint management, task tracking, AI estimation, real-time analytics, notifications, team management, and knowledge base search. Use for all project management operations, from creating tasks to analyzing team velocity.
+description: Complete 10x PM integration for AI-powered project management. Provides sprint management, task tracking, AI estimation, self-learning intelligence, real-time analytics, notifications, team management, and knowledge base search. Use for all project management operations, from creating tasks to analyzing team velocity.
 ---
 
 # 10x PM - AI-Powered Project Management
 
-Complete project management system with AI, analytics, and team collaboration capabilities.
+Complete project management system with AI self-learning, analytics, and team collaboration capabilities.
 
 ---
 
@@ -46,7 +46,7 @@ POST /api/projects
 
 ---
 
-### 📋 Tasks
+### 📋 Tasks (Sub-Phase 1.1: Enhanced Lifecycle)
 
 ```
 GET    /api/tasks                       - List all tasks
@@ -62,9 +62,20 @@ POST   /api/tasks/{id}/dependencies     - Add dependency
 
 **Task Statuses:** `backlog`, `todo`, `doing`, `review`, `done`
 
+**Valid Transitions:**
+- `backlog` → `todo`
+- `todo` → `doing` (blocked if unresolved dependencies exist)
+- `doing` → `review`
+- `review` → `done` or `todo` (reject back)
+- Any status → `backlog` (reset path)
+
+**Auto-Timestamps:**
+- `started_at` — set automatically when status → `doing`
+- `completed_at` — set automatically when status → `done`
+
 **Example:**
 ```python
-# Create task
+# Create task with full lifecycle fields
 POST /api/tasks
 {
   "project_id": "uuid",
@@ -73,13 +84,61 @@ POST /api/tasks
   "status": "todo",
   "assignee": "Sarah Johnson",
   "priority": "high",
-  "story_points": 5
+  "story_points": 5,
+  "due_date": "2026-03-15",
+  "reviewer_id": "reviewer-uuid",
+  "created_by": "creator-uuid",
+  "task_type": "feature"
 }
+
+# Update task status (auto-sets started_at)
+PUT /api/tasks/{task_id}
+{ "status": "doing" }
+# Response includes: started_at: "2026-02-19T10:30:00Z"
 ```
 
 ---
 
-### 🏃 Sprints (NEW!)
+### 🔗 Task Dependencies (Sub-Phase 1.2)
+
+```
+GET    /api/projects/{id}/dependencies  - Get all dependencies for a project
+GET    /api/tasks/{id}/dependencies     - Get dependencies for one task
+POST   /api/tasks/{id}/dependencies     - Add dependency (blocks relationship)
+DELETE /api/dependencies/{id}           - Remove dependency
+```
+
+**Dependency Rules:**
+- Tasks can only depend on tasks in the same project
+- Circular dependencies are rejected (DFS detection)
+- Moving a task to `doing` is blocked if it has unresolved blockers (not in `done`)
+
+**Example:**
+```python
+# Add dependency: task B is blocked by task A
+POST /api/tasks/{task_b_id}/dependencies
+{ "depends_on_id": "task_a_id" }
+# Response: { "id": "dep-uuid", "task_id": "...", "depends_on_id": "..." }
+
+# Get task dependencies
+GET /api/tasks/{task_id}/dependencies
+# Response: {
+#   "blocks": [{ "id": "...", "depends_on_id": "...", "depends_on_title": "...", "depends_on_status": "todo" }],
+#   "blocked_by": [{ "id": "...", "depends_on_id": "...", "depends_on_title": "...", "depends_on_status": "doing" }]
+# }
+
+# Try to move blocked task to doing — rejected
+PUT /api/tasks/{blocked_task_id}
+{ "status": "doing" }
+# Error 400: "Task is blocked by: [Task A title] (todo)"
+
+# Remove dependency
+DELETE /api/dependencies/{dependency_id}
+```
+
+---
+
+### 🏃 Sprints
 
 ```
 POST   /api/projects/{id}/sprints          - Create sprint
@@ -117,7 +176,7 @@ PUT /api/tasks/{task_id}/sprint
 
 ---
 
-### 🤖 AI Features (NEW!)
+### 🤖 AI Features — Classic
 
 ```
 POST   /api/ai/tasks/{id}/estimate              - AI task estimation
@@ -155,7 +214,145 @@ POST /api/ai/projects/{project_id}/plan-sprint
 
 ---
 
-### 📊 Analytics (NEW!)
+### 🧠 AI Self-Learning Module (Phases 1–6)
+
+The self-learning module observes every task completion, approval, and rejection event, builds pattern knowledge over time, and surfaces intelligent suggestions to the team.
+
+#### Magic Moment — Project Setup Suggestions
+
+```
+POST   /api/ai/projects/{id}/suggest-setup      - Generate task suggestions for new project
+POST   /api/ai/suggestions/{id}/feedback        - Record user feedback (accept/reject/modify)
+```
+
+**Example:**
+```python
+# Trigger Magic Moment after creating a project
+POST /api/ai/projects/{project_id}/suggest-setup
+{
+  "title": "E-Commerce Mobile App",
+  "description": "React Native shopping app with payments, auth, and catalog"
+}
+# Response: {
+#   "project_id": "uuid",
+#   "suggestion_id": "uuid",  # null if no suggestion stored
+#   "confidence": 0.82,
+#   "template_used": "mobile_app_v3",
+#   "cold_start": false,
+#   "message": "Based on 12 similar projects",
+#   "suggested_tasks": [
+#     {
+#       "title": "Setup authentication flow",
+#       "description": "Implement user login, signup, and token refresh",
+#       "task_type": "feature",
+#       "priority": "high",
+#       "assignee": "User",
+#       "agent_suitable": false,
+#       "estimated_days": 2
+#     },
+#     ...
+#   ]
+# }
+
+# Record feedback after user accepts/rejects suggestions
+POST /api/ai/suggestions/{suggestion_id}/feedback
+{
+  "user_response": "accepted",   # "accepted", "rejected", or "modified"
+  "modifications": {}            # Optional: tasks that were modified
+}
+```
+
+#### Learning Engine
+
+```
+GET    /api/ai/learn/status                     - Learning system status
+POST   /api/ai/learn                            - Trigger background observation processing
+```
+
+**Example:**
+```python
+# Check learning status
+GET /api/ai/learn/status
+# Response: {
+#   "pending_observations": 12,
+#   "knowledge_stores": {
+#     "project_templates": 8,
+#     "task_blueprints": 47,
+#     "duration_estimates": 203,
+#     "team_profiles": 6,
+#     "quality_patterns": 14,
+#     "total_observations": 384,
+#     "feedback_records": 91
+#   }
+# }
+
+# Process pending observations (batch_size default: 50)
+POST /api/ai/learn?batch_size=50
+# Response: { "pending": 0, "message": "Processed 12 observations" }
+```
+
+#### Team Intelligence
+
+```
+GET    /api/ai/team-intelligence                - Get all team intelligence profiles
+```
+
+**Example:**
+```python
+# Get team profiles
+GET /api/ai/team-intelligence
+# Response: [{
+#   "id": "profile-uuid",
+#   "person_id": "user-uuid",
+#   "person_name": "Sarah Johnson",
+#   "skills_strong": ["backend", "api-design", "auth"],
+#   "preferred_task_types": ["feature", "integration"],
+#   "approval_rate": 0.91,
+#   "data_points": 47
+# }, ...]
+```
+
+#### Quality Patterns
+
+```
+GET    /api/ai/quality-patterns                 - Get quality patterns (rejection rates by task type)
+```
+
+**Example:**
+```python
+# Get quality patterns (min_rejection_rate filter optional)
+GET /api/ai/quality-patterns?min_rejection_rate=0.2
+# Response: [{
+#   "id": "pattern-uuid",
+#   "task_type": "frontend",
+#   "category": "UI Review",
+#   "rejection_rate": 0.38,
+#   "prevention_tips": ["Include mobile screenshots", "Run Storybook tests first"]
+# }, ...]
+```
+
+#### Model Accuracy
+
+```
+GET    /api/ai/accuracy                         - Get model accuracy over time
+```
+
+**Example:**
+```python
+# Get accuracy trend (last 12 months default)
+GET /api/ai/accuracy?limit=12
+# Response: [{
+#   "period_label": "2026-02",
+#   "suggestion_type": "task_blueprint",
+#   "total_suggestions": 34,
+#   "accepted_all_count": 28,
+#   "avg_accuracy_score": 82.4
+# }, ...]
+```
+
+---
+
+### 📊 Analytics
 
 ```
 GET    /api/analytics/sprints/{id}/burndown        - Sprint burndown chart
@@ -186,7 +383,7 @@ GET /api/analytics/projects/{project_id}/dashboard
 
 ---
 
-### 🔔 Notifications (NEW!)
+### 🔔 Notifications
 
 ```
 GET    /api/notifications                   - Get user notifications
@@ -212,7 +409,7 @@ PUT /api/notifications/{notification_id}/read
 
 ---
 
-### 👥 Team Management (NEW!)
+### 👥 Team Management
 
 ```
 POST   /api/invitations/{org_id}           - Create invitation
@@ -275,7 +472,79 @@ GET    /api/database/metrics               - Get database metrics
 
 ## Complete Workflow Examples
 
-### Example 1: Full Sprint Workflow
+### Example 1: Magic Moment — AI Task Setup on New Project
+
+```python
+# 1. Create project with description
+project = POST /api/projects
+{
+  "title": "E-Commerce Mobile App",
+  "description": "React Native shopping app with payments, product catalog, user auth"
+}
+
+# 2. Immediately trigger Magic Moment (automatic in UI after project creation)
+suggestions = POST /api/ai/projects/{project.id}/suggest-setup
+{
+  "title": project.title,
+  "description": project.description
+}
+# Returns 5-10 suggested tasks with priorities, types, and estimates
+
+# 3a. User accepts all suggestions → record feedback
+POST /api/ai/suggestions/{suggestions.suggestion_id}/feedback
+{ "user_response": "accepted" }
+
+# 3b. Or user modifies some tasks → record modified feedback
+POST /api/ai/suggestions/{suggestions.suggestion_id}/feedback
+{
+  "user_response": "modified",
+  "modifications": { "removed_tasks": 2, "adjusted_priorities": 3 }
+}
+
+# 4. Create accepted tasks
+for task in suggestions.suggested_tasks:
+    POST /api/tasks
+    { "project_id": project.id, "title": task.title, "priority": task.priority, ... }
+
+# 5. View AI Intelligence dashboard to monitor learning
+GET /api/ai/learn/status
+# Shows knowledge stores growing as patterns are learned
+```
+
+### Example 2: Task Dependencies Workflow
+
+```python
+# 1. Create tasks with dependencies
+task_auth = POST /api/tasks
+{ "project_id": "...", "title": "Setup Auth Module", "status": "todo" }
+
+task_profile = POST /api/tasks
+{ "project_id": "...", "title": "User Profile Page", "status": "todo" }
+
+# 2. Mark profile page as blocked by auth
+POST /api/tasks/{task_profile.id}/dependencies
+{ "depends_on_id": task_auth.id }
+
+# 3. Try to move profile page to doing — blocked!
+PUT /api/tasks/{task_profile.id}
+{ "status": "doing" }
+# Error 400: "Task is blocked by: Setup Auth Module (todo)"
+
+# 4. Complete auth task
+PUT /api/tasks/{task_auth.id}
+{ "status": "done" }
+
+# 5. Now profile page can move to doing
+PUT /api/tasks/{task_profile.id}
+{ "status": "doing" }
+# Success — started_at auto-set
+
+# 6. Check all dependencies for the project
+GET /api/projects/{project_id}/dependencies
+# Returns map of all task dependency relationships
+```
+
+### Example 3: Full Sprint Workflow
 
 ```python
 # 1. Create project
@@ -328,13 +597,13 @@ GET /api/analytics/projects/{project.id}/dashboard
 # 9. Move task to doing
 PUT /api/tasks/{task1.id}
 { "status": "doing" }
-# Triggers notification to assignee
+# Auto-sets started_at, triggers notification to assignee
 
 # 10. Check notifications
 GET /api/notifications?unread_only=true
 ```
 
-### Example 2: Team Collaboration
+### Example 4: Team Collaboration
 
 ```python
 # 1. Invite team member
@@ -363,25 +632,31 @@ GET /api/sprints/{sprint_id}/capacity
 # }
 ```
 
-### Example 3: Analytics & Insights
+### Example 5: AI Self-Learning Pipeline
 
 ```python
-# 1. Get sprint burndown
-GET /api/analytics/sprints/{sprint_id}/burndown
-# Returns: daily snapshots, ideal vs actual
+# 1. Tasks complete and trigger automatic observations
+# (DB triggers fire on status changes, storing to ai_observations)
 
-# 2. Get velocity trends
-GET /api/analytics/projects/{project_id}/velocity?limit=5
-# Returns: last 5 sprints with velocity data
+# 2. Check pending observations
+GET /api/ai/learn/status
+# { "pending_observations": 15, "knowledge_stores": {...} }
 
-# 3. Get complete dashboard
-GET /api/analytics/projects/{project_id}/dashboard
-# Returns: {
-#   "active_sprint": {...},
-#   "burndown": {...},
-#   "velocity_summary": {...},
-#   "velocity_chart": {...}
-# }
+# 3. Process observations to update knowledge stores
+POST /api/ai/learn?batch_size=50
+# { "pending": 0, "message": "Processed 15 observations" }
+
+# 4. Review team intelligence profiles
+GET /api/ai/team-intelligence
+# See who excels at which task types, their approval rates
+
+# 5. Review quality patterns
+GET /api/ai/quality-patterns?min_rejection_rate=0.3
+# See which task types have high rejection — and why
+
+# 6. View model accuracy trend
+GET /api/ai/accuracy?limit=6
+# Track how AI suggestions improve over time
 ```
 
 ---
@@ -413,32 +688,52 @@ headers = {
    - Feature organization
    - Document management
 
-2. **Sprint Management**
+2. **Enhanced Task Lifecycle (Sub-Phase 1.1)**
+   - 5-status pipeline: `backlog → todo → doing → review → done`
+   - Transition validation (only valid moves allowed)
+   - Auto-timestamps: `started_at`, `completed_at`
+   - Extra fields: `story_points`, `due_date`, `reviewer_id`, `task_type`
+
+3. **Task Dependencies (Sub-Phase 1.2)**
+   - Blocking relationships between tasks (same project)
+   - Circular dependency prevention (DFS detection)
+   - `doing` transition blocked when unresolved blockers exist
+   - Priority filter on board/table views
+
+4. **Sprint Management**
    - Agile sprint planning
    - Capacity tracking
    - Task-sprint assignments
    - Sprint lifecycle (planning → active → completed)
 
-3. **AI-Powered Features**
+5. **AI-Powered Features (Classic)**
    - Task estimation (story points, duration)
    - Sprint planning (task selection, capacity)
    - Dependency detection
    - Multi-provider (Claude, OpenAI, Ollama)
 
-4. **Analytics & Insights**
+6. **AI Self-Learning Module (Phases 1–6)**
+   - **Magic Moment**: Auto-suggest 5-10 tasks when a new project is created with a description
+   - **Learning Engine**: Processes task observations (complete/reject/approve) into pattern knowledge
+   - **Team Intelligence**: Builds profiles per person — skills, preferred task types, approval rates
+   - **Quality Patterns**: Tracks rejection rates by task type with prevention tips
+   - **Model Accuracy**: Monitors AI suggestion acceptance rates over time
+   - **Feedback Loop**: Every accept/reject/modify trains the system for future suggestions
+
+7. **Analytics & Insights**
    - Sprint burndown charts
    - Velocity tracking
    - Timeline predictions
    - Capacity warnings
    - Team performance metrics
 
-5. **Team Collaboration**
+8. **Team Collaboration**
    - User invitations (email)
    - Role-based permissions (7 levels)
    - Real-time notifications
    - Activity logging
 
-6. **Knowledge Management**
+9. **Knowledge Management**
    - RAG-powered search
    - Website crawling
    - Document upload
@@ -447,6 +742,14 @@ headers = {
 ---
 
 ## Quick Reference by Use Case
+
+### "Create a new project with AI task suggestions"
+```python
+1. POST /api/projects - Create project (with description)
+2. POST /api/ai/projects/{id}/suggest-setup - Get AI task suggestions
+3. POST /api/tasks (x N) - Create accepted tasks
+4. POST /api/ai/suggestions/{id}/feedback - Record acceptance feedback
+```
 
 ### "Create a new sprint with AI planning"
 ```python
@@ -457,11 +760,28 @@ headers = {
 5. GET /api/analytics/sprints/{id}/burndown - View progress
 ```
 
+### "Set up task dependencies"
+```python
+1. POST /api/tasks/{id}/dependencies - Add blocker relationship
+2. GET /api/tasks/{id}/dependencies - Verify blocks/blocked_by
+3. GET /api/projects/{id}/dependencies - View all project dependencies
+4. DELETE /api/dependencies/{id} - Remove when no longer needed
+```
+
 ### "Estimate a task"
 ```python
 1. POST /api/tasks - Create task
 2. POST /api/ai/tasks/{id}/estimate - Get AI estimation
 3. PUT /api/tasks/{id} - Update with estimated story points
+```
+
+### "Monitor AI learning"
+```python
+1. GET /api/ai/learn/status - Check pending observations
+2. POST /api/ai/learn - Process pending observations
+3. GET /api/ai/team-intelligence - View team profiles
+4. GET /api/ai/quality-patterns - Check high-rejection patterns
+5. GET /api/ai/accuracy - Review model accuracy trend
 ```
 
 ### "Invite team member"
@@ -485,13 +805,23 @@ headers = {
 
 **Available in Claude Code/Cursor:**
 
+### AI Self-Learning Tools (NEW)
+- `suggest_project_setup(project_id, title, description)` - Magic Moment: generate task suggestions for new project
+- `get_team_intelligence(person_id?, task_type?)` - Team intelligence profiles and skill analysis
+- `get_quality_patterns(task_type?, min_rejection_rate?)` - Quality patterns and high-rejection task types
+- `manage_ai_learning(action, batch_size?)` - Learning actions: `status`, `learn`, `rebuild`, `accuracy`
+
+### Task Dependency Tools (NEW)
+- `find_task_dependencies(task_id?, project_id?)` - Query task dependencies (blocks/blocked_by)
+- `manage_task_dependency(action, task_id?, depends_on_id?, dependency_id?)` - Create/delete dependencies
+
 ### Sprint Tools
 - `find_sprints(project_id, status)` - List sprints
 - `manage_sprint(action, sprint_id, name, status, capacity_hours)` - Create/update/delete
 - `get_sprint_capacity(sprint_id)` - Get capacity metrics
 - `assign_task_to_sprint(task_id, sprint_id)` - Assign task
 
-### AI Tools
+### AI Tools (Classic)
 - `estimate_task(task_id, project_id)` - Get AI estimation
 - `plan_sprint(project_id, capacity_hours)` - AI sprint planning
 
@@ -500,15 +830,15 @@ headers = {
 - `get_project_analytics(project_id)` - Complete dashboard
 - `get_velocity_chart(project_id, limit)` - Velocity trends
 
-### Project Tools (Existing)
+### Project Tools
 - `find_projects(query, project_id)` - Search/list projects
 - `manage_project(action, title, description)` - Create/update/delete
 
-### Task Tools (Existing)
+### Task Tools
 - `find_tasks(query, filter_by, filter_value)` - Search/filter tasks
-- `manage_task(action, task_id, title, status, assignee)` - Create/update/delete
+- `manage_task(action, task_id, title, status, assignee, story_points, due_date)` - Create/update/delete
 
-### Knowledge Tools (Existing)
+### Knowledge Tools
 - `rag_search_knowledge_base(query, source_id, match_count)` - Semantic search
 - `rag_get_available_sources()` - List knowledge sources
 
@@ -545,6 +875,11 @@ headers = {
 - Velocity calculations
 - Progress predictions
 
+**AI Self-Learning:**
+- DB triggers auto-capture task events (complete/reject/approve) into `ai_observations`
+- Background processing converts observations into pattern knowledge
+- "Process Now" button triggers immediate processing
+
 ---
 
 ## Error Handling
@@ -569,11 +904,18 @@ headers = {
 }
 ```
 
+**Dependency Block Error:**
+```json
+{
+  "detail": "Task is blocked by: Setup Auth Module (todo), Write API Spec (todo)"
+}
+```
+
 **Common Errors:**
 - `401` - Authentication required (missing X-User-Id)
 - `403` - Permission denied (insufficient role)
 - `404` - Resource not found
-- `400` - Invalid request data
+- `400` - Invalid request data (including circular deps, blocked transitions)
 
 ---
 
@@ -603,10 +945,11 @@ AI_PROVIDER=claude  # claude, openai, or ollama
 **Always use 10x PM for:**
 - ✅ Task management and tracking
 - ✅ Sprint planning and execution
-- ✅ AI-powered estimations
+- ✅ AI-powered estimations and suggestions
 - ✅ Team collaboration
 - ✅ Progress analytics
 - ✅ Knowledge base search
+- ✅ AI intelligence monitoring
 
 **Example prompts:**
 - "Create a sprint for Q1 2026 with AI-selected tasks"
@@ -614,6 +957,9 @@ AI_PROVIDER=claude  # claude, openai, or ollama
 - "Estimate how long this task will take"
 - "Show me the burndown for the current sprint"
 - "Invite john@company.com as a team lead"
+- "Generate task suggestions for my new mobile app project"
+- "Which task types have the highest rejection rates?"
+- "Show me Sarah's team intelligence profile"
 
 ---
 
@@ -622,6 +968,9 @@ AI_PROVIDER=claude  # claude, openai, or ollama
 ✅ Multi-user with invitations
 ✅ Role-based security (72 permission rules)
 ✅ AI-powered estimation and planning
+✅ AI self-learning (Magic Moment, team intelligence, quality patterns)
+✅ Task dependencies with circular detection
+✅ Enhanced task lifecycle (5 statuses, auto-timestamps, story points)
 ✅ Real-time notifications
 ✅ Visual analytics and predictions
 ✅ Email integration (SendGrid)
@@ -635,15 +984,24 @@ AI_PROVIDER=claude  # claude, openai, or ollama
 ## System Architecture
 
 **Backend:** FastAPI + Python 3.12
-**Database:** PostgreSQL + Supabase (26 tables, 10+ triggers)
-**Frontend:** React 18 + TypeScript
-**AI:** Multi-provider (Claude, OpenAI, Ollama)
+**Database:** PostgreSQL + Supabase (35 tables, 13+ triggers)
+**Frontend:** React 18 + TypeScript (AI Intelligence page at `/ai`)
+**AI:** Multi-provider (Claude, OpenAI, Ollama) with abstract `generate_text()` interface
 **Email:** SendGrid SMTP
 **Real-time:** Smart polling with ETag caching
 
----
+**AI Self-Learning DB Tables (9):**
+- `ai_project_templates` — Learned project templates from past projects
+- `ai_task_blueprints` — Reusable task patterns by type
+- `ai_dependency_patterns` — Common task dependency patterns
+- `ai_duration_estimates` — Historical duration data by task type + complexity
+- `ai_team_intelligence` — Per-person skill and performance profiles
+- `ai_quality_patterns` — Rejection rate patterns with prevention tips
+- `ai_feedback_loop` — User feedback on all AI suggestions
+- `ai_observations` — Raw event observations (pending processing)
+- `ai_model_accuracy` — Monthly suggestion acceptance rate tracking
 
-Ready for enterprise deployment! 🚀
+---
 
 ### 🔐 Authentication (Phase 8)
 
@@ -757,8 +1115,7 @@ POST /api/api-keys/generate
 
 ---
 
-
-### 📊 Admin Dashboard (Latest)
+### 📊 Admin Dashboard
 
 ```
 GET    /api/admin/dashboard/stats       - Get real-time org statistics
@@ -789,7 +1146,7 @@ GET /api/admin/team/members
 
 ---
 
-### 💬 Comments & History (Latest)
+### 💬 Comments & History
 
 ```
 POST   /api/tasks/{id}/comments          - Add comment to task
@@ -829,19 +1186,21 @@ GET /api/tasks/{task_id}/status-history
 
 ## Complete Endpoint Count
 
-**Total: 114 API Endpoints**
+**Total: 123 API Endpoints**
 
 Breakdown:
 - Organizations & Roles: 26
 - Sprints: 9
 - Notifications: 5
 - Projects & Tasks: 15
-- AI Features: 6
+- Task Dependencies: 4 (NEW — Sub-Phase 1.2)
+- AI Features Classic: 6
+- AI Self-Learning: 7 (NEW — suggest-setup, feedback, learn/status, learn, team-intelligence, quality-patterns, accuracy)
 - Analytics: 4
 - User Management: 13
 - Agent Workflow: 6
-- Admin Dashboard: 2 ← NEW
-- Comments: 3 ← NEW
+- Admin Dashboard: 2
+- Comments: 3
 - Knowledge Base: 10
 - Documents: 8
 - System: 10
@@ -850,5 +1209,4 @@ Breakdown:
 
 **COMPLETE PRODUCTION-READY MCP SKILL!**
 
-All 114 endpoints documented and ready for Claude Code/Cursor integration.
-
+All 123 endpoints documented and ready for Claude Code/Cursor integration.
