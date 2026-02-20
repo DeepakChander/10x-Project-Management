@@ -13,8 +13,8 @@ export const getAssigneeIcon = (assigneeName: Assignee) => {
       return <User className="w-4 h-4 text-[#C0745F]" />;
     case "Coding Agent":
       return <Bot className="w-4 h-4 text-[#D4917A]" />;
-    case "Archon":
-      return <img src="/logo-10x.png" alt="10x" className="w-4 h-4" />;
+    case "10x Agent":
+      return <Bot className="w-4 h-4 text-[#C0745F]" />;
     default:
       return <User className="w-4 h-4 text-[#C0745F]" />;
   }
@@ -27,7 +27,7 @@ export const getAssigneeGlow = (assigneeName: Assignee) => {
       return "shadow-sm";
     case "Coding Agent":
       return "shadow-sm";
-    case "Archon":
+    case "10x Agent":
       return "shadow-sm";
     default:
       return "shadow-sm";

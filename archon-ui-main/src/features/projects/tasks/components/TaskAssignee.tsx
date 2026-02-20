@@ -30,10 +30,8 @@ const getAssigneeIcon = (assigneeName: string, size: "sm" | "md" = "sm") => {
   if (assigneeName === "User") {
     return <User className={cn(sizeClass, "text-[#C0745F]")} />;
   }
-  if (assigneeName === "Archon") {
-    return <img src="/logo-10x.png" alt="10x" className={sizeClass} />;
-  }
   if (
+    assigneeName === "10x Agent" ||
     assigneeName === "Coding Agent" ||
     assigneeName.toLowerCase().includes("agent") ||
     assigneeName.toLowerCase().includes("ai")
@@ -60,14 +58,8 @@ const getAssigneeStyles = (assigneeName: string) => {
       color: "text-[#C0745F] dark:text-[#D4917A]",
     };
   }
-  if (assigneeName === "Archon") {
-    return {
-      glow: "shadow-sm",
-      hoverGlow: "hover:shadow-sm",
-      color: "text-[#C0745F] dark:text-[#D4917A]",
-    };
-  }
   if (
+    assigneeName === "10x Agent" ||
     assigneeName === "Coding Agent" ||
     assigneeName.toLowerCase().includes("agent") ||
     assigneeName.toLowerCase().includes("ai")

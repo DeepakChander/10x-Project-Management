@@ -60,6 +60,8 @@ class ExecuteTaskRequest(BaseModel):
     description: str = ""
     project_id: str | None = None
     assignee: str = "Coding Agent"
+    user_api_key: str | None = None   # Per-user OpenAI API key (decrypted)
+    user_model: str | None = None     # e.g. "openai:gpt-4o-mini"
 
 
 # Agent registry
@@ -153,7 +155,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Archon Agents Service",
+    title="10x Agents Service",
     description="Lightweight service hosting PydanticAI agents",
     version="1.0.0",
     lifespan=lifespan,
@@ -212,13 +214,12 @@ async def execute_task(request: ExecuteTaskRequest):
     Execute a project task using the coding agent.
 
     Called automatically by the task dispatcher when a task is assigned
-    to "Coding Agent" or "Archon" in the project management UI.
+    to "Coding Agent", "Archon", or "10x Agent" in the project management UI.
+    When user_api_key is provided it takes precedence over the server-level key.
     """
     try:
         if "coding" not in app.state.agents:
             return AgentResponse(success=False, error="Coding agent not available — check AI model configuration")
-
-        agent = app.state.agents["coding"]
 
         from .coding_agent import TaskExecutionDeps
 
@@ -229,9 +230,36 @@ async def execute_task(request: ExecuteTaskRequest):
         )
 
         desc_section = f"\n\nDescription:\n{request.description}" if request.description.strip() else ""
-        prompt = f"Task: {request.title}{desc_section}\n\nPlease analyse this task, search for relevant context in the knowledge base if needed, and provide a detailed implementation plan or analysis."
+        prompt = (
+            f"Task: {request.title}{desc_section}\n\n"
+            "Please analyse this task, search for relevant context in the knowledge base if needed, "
+            "and provide a detailed implementation plan or analysis."
+        )
 
-        result = await agent.run(prompt, deps)
+        # If the caller supplied a personal API key, build a custom model instance
+        # so we never rely solely on the server-level environment variable.
+        if request.user_api_key:
+            try:
+                from openai import AsyncOpenAI
+                from pydantic_ai.models.openai import OpenAIModel
+
+                raw_model = request.user_model or "openai:gpt-4o-mini"
+                model_name = raw_model.split(":", 1)[-1]  # strip "openai:" prefix
+
+                custom_openai = AsyncOpenAI(api_key=request.user_api_key)
+                custom_model = OpenAIModel(model_name, openai_client=custom_openai)
+
+                logger.info(f"Executing task {request.task_id} with user-supplied API key (model: {model_name})")
+                raw = await asyncio.wait_for(
+                    app.state.agents["coding"]._agent.run(prompt, deps=deps, model=custom_model),
+                    timeout=120.0,
+                )
+                result = raw.data
+            except Exception as e:
+                logger.error(f"Custom-key execution failed for {request.task_id}: {e}", exc_info=True)
+                return AgentResponse(success=False, error=f"Agent failed with your API key: {e}")
+        else:
+            result = await app.state.agents["coding"].run(prompt, deps)
 
         return AgentResponse(
             success=True,

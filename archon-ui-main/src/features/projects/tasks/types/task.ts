@@ -15,7 +15,7 @@ export type DatabaseTaskStatus = "backlog" | "todo" | "doing" | "review" | "done
 export type Assignee = string;
 
 // Common assignee options for UI suggestions
-export const COMMON_ASSIGNEES = ["User", "Archon", "Coding Agent"] as const;
+export const COMMON_ASSIGNEES = ["User", "10x Agent", "Coding Agent"] as const;
 export type CommonAssignee = (typeof COMMON_ASSIGNEES)[number];
 
 // Task counts for project overview

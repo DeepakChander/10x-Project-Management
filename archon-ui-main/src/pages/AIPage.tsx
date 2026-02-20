@@ -16,12 +16,15 @@ import {
   Clock,
   Database,
   Loader2,
+  Plus,
   RefreshCw,
   Sparkles,
   TrendingUp,
   Users,
 } from "lucide-react";
 import type React from "react";
+import { useState } from "react";
+import { AIProjectSetupModal } from "../features/ai/components/AIProjectSetupModal";
 import {
   useLearningStatus,
   useModelAccuracy,
@@ -29,6 +32,7 @@ import {
   useTeamProfiles,
   useTriggerLearning,
 } from "../features/ai/hooks/useAIQueries";
+import { useCreateProject, useProjects } from "../features/projects/hooks/useProjectQueries";
 import { Button } from "../features/ui/primitives/button";
 import { cn } from "../features/ui/primitives/styles";
 
@@ -64,6 +68,102 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number; 
         <div className="text-xs text-gray-400 mt-0.5 truncate">{label}</div>
       </div>
     </div>
+  );
+}
+
+// ── New-user hero — shown when the user has no projects yet ──────
+
+function NewProjectAIHero() {
+  const { data: projects, isLoading: projectsLoading } = useProjects();
+  const createProject = useCreateProject();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [setupModal, setSetupModal] = useState<{ open: boolean; projectId: string; projectTitle: string; projectDescription: string } | null>(null);
+
+  // Only show this hero when the user has zero projects
+  if (projectsLoading || (projects && projects.length > 0)) return null;
+
+  const handleCreate = () => {
+    if (!title.trim()) return;
+    createProject.mutate(
+      { title: title.trim(), description: description.trim() },
+      {
+        onSuccess: (project) => {
+          setSetupModal({
+            open: true,
+            projectId: project.id,
+            projectTitle: project.title,
+            projectDescription: project.description ?? "",
+          });
+        },
+      }
+    );
+  };
+
+  return (
+    <>
+      <div className="rounded-xl border border-[#C0745F]/40 bg-gradient-to-br from-[#C0745F]/10 to-transparent p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[#C0745F]/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-[#C0745F]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Create your first project with AI</h2>
+            <p className="text-sm text-gray-400">Describe what you want to build — AI will generate a full task breakdown instantly.</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-400 mb-1 block">Project name</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Customer Portal Redesign"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#C0745F]/60 focus:ring-1 focus:ring-[#C0745F]/30"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-400 mb-1 block">What are you building? <span className="text-gray-500">(the more detail, the better the AI suggestions)</span></label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. A self-service portal for enterprise customers to manage subscriptions, view invoices, and submit support tickets. Needs SSO, role-based access, and a dashboard with usage analytics."
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#C0745F]/60 focus:ring-1 focus:ring-[#C0745F]/30 resize-none"
+            />
+          </div>
+          <Button
+            onClick={handleCreate}
+            disabled={!title.trim() || createProject.isPending}
+            className="w-full bg-[#C0745F] hover:bg-[#A85A45] text-white"
+          >
+            {createProject.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating project…
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Create project & get AI suggestions
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {setupModal && (
+        <AIProjectSetupModal
+          open={setupModal.open}
+          onOpenChange={(open) => setSetupModal(open ? setupModal : null)}
+          projectId={setupModal.projectId}
+          projectTitle={setupModal.projectTitle}
+          projectDescription={setupModal.projectDescription}
+        />
+      )}
+    </>
   );
 }
 
@@ -351,6 +451,9 @@ export function AIPage() {
           </p>
         </div>
       </div>
+
+      {/* New-user hero — only visible when no projects exist */}
+      <NewProjectAIHero />
 
       {/* Confidence legend */}
       <div className="flex flex-wrap gap-4 text-xs text-gray-400">

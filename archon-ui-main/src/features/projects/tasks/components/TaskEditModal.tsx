@@ -38,7 +38,7 @@ const ASSIGNEE_OPTIONS: ComboBoxOption[] = COMMON_ASSIGNEES.map((name) => ({
   value: name,
   label: name,
   description:
-    name === "User" ? "Assign to human user" : name === "Archon" ? "Assign to 10x system" : "Assign to Coding Agent",
+    name === "User" ? "Assign to human user" : name === "10x Agent" ? "Assign to 10x AI agent (uses your API key)" : "Assign to Coding Agent",
 }));
 
 export const TaskEditModal = memo(
