@@ -173,7 +173,7 @@ function LearningStatusSection() {
   const { data, isLoading } = useLearningStatus();
   const triggerLearning = useTriggerLearning();
 
-  const stores = data?.knowledge_stores ?? {};
+  const stores = (data?.knowledge_stores ?? {}) as Record<string, number>;
   const pending = data?.pending_observations ?? 0;
 
   const storeEntries: Array<{ key: string; label: string }> = [
@@ -186,6 +186,9 @@ function LearningStatusSection() {
     { key: "feedback_records", label: "Feedback Records" },
   ];
 
+  const totalKnowledge = storeEntries.reduce((sum, { key }) => sum + (stores[key] ?? 0), 0);
+  const hasData = totalKnowledge > 0 || pending > 0;
+
   return (
     <section className="rounded-xl border border-white/10 bg-white/5 p-5">
       <div className="flex items-center justify-between mb-4">
@@ -193,27 +196,29 @@ function LearningStatusSection() {
           <Database className="w-5 h-5 text-[#C0745F]" />
           <h2 className="text-base font-semibold text-white">Learning Status</h2>
         </div>
-        <div className="flex items-center gap-2">
-          {pending > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-              {pending} pending
-            </span>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => triggerLearning.mutate(50)}
-            disabled={triggerLearning.isPending || pending === 0}
-            className="text-xs"
-          >
-            {triggerLearning.isPending ? (
-              <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3 h-3 mr-1.5" />
+        {hasData && (
+          <div className="flex items-center gap-2">
+            {pending > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                {pending} pending
+              </span>
             )}
-            Process Now
-          </Button>
-        </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => triggerLearning.mutate(50)}
+              disabled={triggerLearning.isPending || pending === 0}
+              className="text-xs"
+            >
+              {triggerLearning.isPending ? (
+                <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3 mr-1.5" />
+              )}
+              Process Now
+            </Button>
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -221,19 +226,28 @@ function LearningStatusSection() {
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading…
         </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {storeEntries.map(({ key, label }) => (
-            <StatCard key={key} label={label} value={(stores as Record<string, number>)[key] ?? 0} icon={BookOpen} />
-          ))}
+      ) : !hasData ? (
+        <div className="py-4 space-y-2">
+          <p className="text-sm text-white/70 font-medium">Ready to start learning.</p>
+          <p className="text-sm text-gray-500">
+            Complete tasks, move them through review, and the AI builds its knowledge automatically.
+            Every task completed is one more data point — no configuration needed.
+          </p>
         </div>
-      )}
-
-      {pending === 0 && !isLoading && (
-        <p className="text-xs text-gray-500 mt-3 flex items-center gap-1">
-          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-          All observations processed — knowledge stores are up to date.
-        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {storeEntries.map(({ key, label }) => (
+              <StatCard key={key} label={label} value={stores[key] ?? 0} icon={BookOpen} />
+            ))}
+          </div>
+          {pending === 0 && (
+            <p className="text-xs text-gray-500 mt-3 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              All observations processed — knowledge stores are up to date.
+            </p>
+          )}
+        </>
       )}
     </section>
   );
@@ -258,9 +272,13 @@ function TeamProfilesSection() {
           Loading…
         </div>
       ) : !profiles || profiles.length === 0 ? (
-        <p className="text-sm text-gray-500 py-2">
-          No team profiles yet. Profiles are built automatically as team members complete tasks.
-        </p>
+        <div className="py-3 space-y-1">
+          <p className="text-sm text-white/70 font-medium">Profiles build themselves.</p>
+          <p className="text-sm text-gray-500">
+            When team members complete and review tasks, the AI automatically tracks their strengths,
+            approval rates, and preferred task types. No setup required.
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
           {profiles.map((profile: Record<string, unknown>) => {
@@ -335,9 +353,13 @@ function QualityPatternsSection() {
           Loading…
         </div>
       ) : !patterns || patterns.length === 0 ? (
-        <p className="text-sm text-gray-500 py-2">
-          No quality patterns learned yet. Patterns emerge after tasks go through review cycles.
-        </p>
+        <div className="py-3 space-y-1">
+          <p className="text-sm text-white/70 font-medium">No patterns yet — that's a good sign.</p>
+          <p className="text-sm text-gray-500">
+            Patterns surface when the same type of task gets rejected repeatedly. As your team ships
+            work through review, the AI flags recurring issues and suggests how to prevent them.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           {(patterns as Array<Record<string, unknown>>).slice(0, 10).map((p) => {
@@ -399,9 +421,13 @@ function ModelAccuracySection() {
           Loading…
         </div>
       ) : !accuracy || accuracy.length === 0 ? (
-        <p className="text-sm text-gray-500 py-2">
-          No accuracy data yet. Accuracy is computed monthly after users interact with AI suggestions.
-        </p>
+        <div className="py-3 space-y-1">
+          <p className="text-sm text-white/70 font-medium">Accuracy tracking starts with your first AI suggestion.</p>
+          <p className="text-sm text-gray-500">
+            Create a project with a description and accept or modify the AI's task suggestions.
+            The system tracks which suggestions you keep versus change, then improves over time.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           {(accuracy as Array<Record<string, unknown>>).slice(0, 6).map((record) => {
@@ -437,6 +463,10 @@ function ModelAccuracySection() {
 // ── Page ─────────────────────────────────────────────────────────
 
 export function AIPage() {
+  const { data: status } = useLearningStatus();
+  const stores = (status?.knowledge_stores ?? {}) as Record<string, number>;
+  const hasAnyData = Object.values(stores).some((v) => v > 0) || (status?.pending_observations ?? 0) > 0;
+
   return (
     <div className="flex flex-col h-full overflow-y-auto px-6 py-6 space-y-6 max-w-5xl mx-auto w-full">
       {/* Header */}
@@ -447,7 +477,7 @@ export function AIPage() {
             AI Intelligence
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            Self-learning insights — grows smarter with every project you complete.
+            Self-learning — grows smarter with every project your team ships.
           </p>
         </div>
       </div>
@@ -455,29 +485,27 @@ export function AIPage() {
       {/* New-user hero — only visible when no projects exist */}
       <NewProjectAIHero />
 
-      {/* Confidence legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-gray-400">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-          Expert (80%+)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-          Confident (60-80%)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />
-          Learning (30-60%)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
-          Exploring (&lt;30%)
-        </span>
-        <span className="flex items-center gap-1.5 ml-auto text-gray-500">
-          <Sparkles className="w-3 h-3" />
-          Magic Moment triggers when you create a new project with a description
-        </span>
-      </div>
+      {/* Confidence legend — only shown once data exists */}
+      {hasAnyData && (
+        <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            Expert (80%+)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+            Confident (60–80%)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />
+            Learning (30–60%)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
+            Exploring (&lt;30%)
+          </span>
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -487,12 +515,14 @@ export function AIPage() {
         <QualityPatternsSection />
       </div>
 
-      {/* Footer note */}
-      <p className="text-xs text-gray-500 pb-2 flex items-center gap-1.5">
-        <Clock className="w-3 h-3" />
-        Knowledge stores update automatically after each task is completed, reviewed, or approved.
-        Use "Process Now" to apply pending observations immediately.
-      </p>
+      {/* Footer note — only shown once data exists */}
+      {hasAnyData && (
+        <p className="text-xs text-gray-500 pb-2 flex items-center gap-1.5">
+          <Clock className="w-3 h-3" />
+          Knowledge stores update automatically after each task is completed, reviewed, or approved.
+          Use "Process Now" to apply pending observations immediately.
+        </p>
+      )}
     </div>
   );
 }
