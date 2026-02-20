@@ -11,6 +11,9 @@ import { DISABLED_QUERY_KEY, STALE_TIMES } from "../../shared/config/queryPatter
 import { projectService } from "../services";
 import type { CreateProjectRequest, Project, UpdateProjectRequest } from "../types";
 
+const isRealUuid = (id: string | undefined): boolean =>
+  !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 // Query keys factory for better organization
 export const projectKeys = {
   all: ["projects"] as const,
@@ -37,9 +40,9 @@ export function useProjects() {
 // Fetch project features
 export function useProjectFeatures(projectId: string | undefined) {
   return useQuery<Awaited<ReturnType<typeof projectService.getProjectFeatures>>>({
-    queryKey: projectId ? projectKeys.features(projectId) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? projectKeys.features(projectId!) : DISABLED_QUERY_KEY,
     queryFn: () => (projectId ? projectService.getProjectFeatures(projectId) : Promise.reject("No project ID")),
-    enabled: !!projectId,
+    enabled: isRealUuid(projectId),
     staleTime: STALE_TIMES.normal,
   });
 }

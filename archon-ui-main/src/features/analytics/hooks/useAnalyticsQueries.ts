@@ -8,6 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import { DISABLED_QUERY_KEY, STALE_TIMES } from "../../shared/config/queryPatterns";
 import { analyticsService } from "../services/analyticsService";
 
+const isRealUuid = (id: string | undefined): boolean =>
+  !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 // Query key factory
 export const analyticsKeys = {
   all: ["analytics"] as const,
@@ -34,10 +37,10 @@ export function useSprintBurndown(sprintId: string | undefined) {
  */
 export function useVelocityChart(projectId: string | undefined, limit: number = 10) {
   return useQuery({
-    queryKey: projectId ? analyticsKeys.velocity(projectId) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? analyticsKeys.velocity(projectId!) : DISABLED_QUERY_KEY,
     queryFn: () =>
       projectId ? analyticsService.getVelocityChart(projectId, limit) : Promise.reject("No project ID"),
-    enabled: !!projectId,
+    enabled: isRealUuid(projectId),
     staleTime: STALE_TIMES.normal,
   });
 }
@@ -47,10 +50,10 @@ export function useVelocityChart(projectId: string | undefined, limit: number = 
  */
 export function useProjectDashboard(projectId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? analyticsKeys.dashboard(projectId) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? analyticsKeys.dashboard(projectId!) : DISABLED_QUERY_KEY,
     queryFn: () =>
       projectId ? analyticsService.getProjectDashboard(projectId) : Promise.reject("No project ID"),
-    enabled: !!projectId,
+    enabled: isRealUuid(projectId),
     staleTime: STALE_TIMES.normal,
   });
 }

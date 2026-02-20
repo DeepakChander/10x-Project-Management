@@ -3,6 +3,9 @@ import { callAPIWithETag } from "../../../shared/api/apiClient";
 import { DISABLED_QUERY_KEY, STALE_TIMES } from "../../../shared/config/queryPatterns";
 import { useToast } from "../../../shared/hooks/useToast";
 import { documentService } from "../services/documentService";
+
+const isRealUuid = (id: string | undefined): boolean =>
+  !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 import type { ProjectDocument } from "../types";
 
 // Query keys factory for documents
@@ -20,12 +23,12 @@ export const documentKeys = {
  */
 export function useProjectDocuments(projectId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? documentKeys.byProject(projectId) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? documentKeys.byProject(projectId!) : DISABLED_QUERY_KEY,
     queryFn: async () => {
       if (!projectId) return [];
       return await documentService.getDocumentsByProject(projectId);
     },
-    enabled: !!projectId,
+    enabled: isRealUuid(projectId),
     staleTime: STALE_TIMES.normal,
   });
 }
