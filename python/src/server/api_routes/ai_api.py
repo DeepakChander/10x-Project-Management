@@ -19,6 +19,7 @@ from ..services.ai_service import AIService
 from ..services.ai_learning_service import AILearningService
 from ..services.ai.provider_factory import AIProviderFactory
 from ..services.projects.task_service import TaskService
+from ..services.user_agent_config_service import UserAgentConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +301,16 @@ async def suggest_project_setup(
     Requires: project:read permission
     """
     try:
-        learning_service = AILearningService()
+        # Use the requesting user's personal API key if they've configured one,
+        # otherwise fall back to server-level env var (AI_PROVIDER / OPENAI_API_KEY)
+        user_config = UserAgentConfigService().get_config(user_id)
+        user_api_key = user_config.get("api_key") if user_config else None
+        user_provider = user_config.get("llm_provider") if user_config else None
+
+        learning_service = AILearningService(
+            ai_provider=user_provider,
+            api_key=user_api_key,
+        )
         result = await learning_service.generate_tasks_from_description(
             project_id=project_id,
             title=request.title,

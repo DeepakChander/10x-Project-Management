@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 class AILearningService:
-    def __init__(self, supabase_client=None, ai_provider: Optional[str] = None):
+    def __init__(self, supabase_client=None, ai_provider: Optional[str] = None, api_key: Optional[str] = None):
         self.client = supabase_client or get_supabase_client()
-        self.ai_provider = AIProviderFactory.get_provider(provider_name=ai_provider)
+        self.ai_provider = AIProviderFactory.get_provider(provider_name=ai_provider, api_key=api_key)
 
         # All sub-services share the same Supabase client
         self.observation_processor = AIObservationProcessor(self.client)
