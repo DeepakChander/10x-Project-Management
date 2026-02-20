@@ -6,6 +6,10 @@ import {
   replaceOptimisticEntity,
 } from "@/features/shared/utils/optimistic";
 import { DISABLED_QUERY_KEY, STALE_TIMES } from "../../../shared/config/queryPatterns";
+
+// Guards against optimistic nanoid IDs (e.g. "i2SZsmk0nR7v-SHgu11y-") reaching the backend
+const isRealUuid = (id: string | undefined): boolean =>
+  !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 import { useSmartPolling } from "../../../shared/hooks";
 import { useToast } from "../../../shared/hooks/useToast";
 import { taskService } from "../services";
@@ -25,12 +29,12 @@ export function useProjectTasks(projectId: string | undefined, enabled = true) {
   const { refetchInterval } = useSmartPolling(2000); // 2s active per guideline for real-time task updates
 
   return useQuery<Task[]>({
-    queryKey: projectId ? taskKeys.byProject(projectId) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? taskKeys.byProject(projectId!) : DISABLED_QUERY_KEY,
     queryFn: async () => {
       if (!projectId) throw new Error("No project ID");
       return taskService.getTasksByProject(projectId);
     },
-    enabled: !!projectId && enabled,
+    enabled: isRealUuid(projectId) && enabled,
     refetchInterval, // Smart interval based on page visibility/focus
     refetchOnWindowFocus: true, // Refetch immediately when tab gains focus (ETag makes this cheap)
     staleTime: STALE_TIMES.frequent,

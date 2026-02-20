@@ -160,12 +160,11 @@ async def get_active_sprint(
 ) -> dict[str, Any]:
     """Get the currently active sprint for a project.
 
+    Returns {"sprint": null} when no active sprint exists (not a 404).
     Requires: sprint:read permission
     """
     sprint = SprintService().get_active_sprint(project_id)
-    if not sprint:
-        raise HTTPException(status_code=404, detail="No active sprint found")
-    return sprint
+    return {"sprint": sprint}
 
 
 # ── Task-Sprint Assignment ────────────────────────────────────

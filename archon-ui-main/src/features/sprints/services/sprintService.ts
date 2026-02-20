@@ -151,20 +151,10 @@ export const sprintService = {
    * Get active sprint for a project
    */
   async getActiveSprint(projectId: string): Promise<Sprint | null> {
-    try {
-      const sprint = await callAPIWithETag<Sprint>(
-        `/api/projects/${projectId}/sprints/active`
-      );
-      return sprint;
-    } catch (error) {
-      // 404 is expected when no active sprint - return null silently
-      if (error instanceof Error && (error.message.includes("404") || error.message.includes("No active sprint"))) {
-        return null;
-      }
-      // Only log unexpected errors
-      console.error(`Failed to get active sprint for project ${projectId}:`, error);
-      throw error;
-    }
+    const response = await callAPIWithETag<{ sprint: Sprint | null }>(
+      `/api/projects/${projectId}/sprints/active`
+    );
+    return response.sprint;
   },
 
   /**

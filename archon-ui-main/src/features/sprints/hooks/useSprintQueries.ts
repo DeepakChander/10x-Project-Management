@@ -8,6 +8,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DISABLED_QUERY_KEY, STALE_TIMES } from "../../shared/config/queryPatterns";
 import { useToast } from "../../shared/hooks/useToast";
 import { taskKeys } from "../../projects/tasks/hooks/useTaskQueries";
+
+// Guards against optimistic nanoid IDs (e.g. "i2SZsmk0nR7v-SHgu11y-") reaching the backend
+const isRealUuid = (id: string | undefined): boolean =>
+  !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 import {
   sprintService,
   type CreateSprintRequest,
@@ -33,9 +37,9 @@ export const sprintKeys = {
  */
 export function useSprints(projectId: string | undefined, status?: SprintStatus) {
   return useQuery({
-    queryKey: projectId ? sprintKeys.list(projectId, status) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? sprintKeys.list(projectId!, status) : DISABLED_QUERY_KEY,
     queryFn: () => (projectId ? sprintService.listSprints(projectId, status) : Promise.reject("No project ID")),
-    enabled: !!projectId,
+    enabled: isRealUuid(projectId),
     staleTime: STALE_TIMES.normal,
   });
 }
@@ -45,9 +49,9 @@ export function useSprints(projectId: string | undefined, status?: SprintStatus)
  */
 export function useActiveSprint(projectId: string | undefined) {
   return useQuery({
-    queryKey: projectId ? sprintKeys.active(projectId) : DISABLED_QUERY_KEY,
+    queryKey: isRealUuid(projectId) ? sprintKeys.active(projectId!) : DISABLED_QUERY_KEY,
     queryFn: () => (projectId ? sprintService.getActiveSprint(projectId) : Promise.reject("No project ID")),
-    enabled: !!projectId,
+    enabled: isRealUuid(projectId),
     staleTime: STALE_TIMES.normal,
   });
 }
