@@ -5,7 +5,7 @@
  * Users can review, remove individual tasks, then accept or skip.
  */
 
-import { BrainCircuit, CheckCircle2, Clock, Loader2, Lock, Sparkles, Trash2, User, X } from "lucide-react";
+import { AlertTriangle, BrainCircuit, CheckCircle2, Clock, Loader2, Lock, Sparkles, Trash2, User, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { taskService } from "../../projects/tasks/services/taskService";
@@ -69,32 +69,42 @@ export const AIProjectSetupModal: React.FC<AIProjectSetupModalProps> = ({
   const [tasks, setTasks] = useState<AITaskSuggestion[]>([]);
   const [suggestionId, setSuggestionId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [extraDescription, setExtraDescription] = useState(projectDescription ?? "");
+  const [needsDescription, setNeedsDescription] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Fetch suggestions when modal opens
-  useEffect(() => {
-    if (!open || !projectId) return;
-
+  const runSuggest = (description: string) => {
+    setNeedsDescription(false);
+    setErrorMessage(null);
     setTasks([]);
     setSuggestionId(null);
 
     suggestMutation.mutate(
-      { projectId, title: projectTitle, description: projectDescription },
+      { projectId, title: projectTitle, description },
       {
         onSuccess: (data) => {
           if (data.needs_description) {
-            // Not enough info — quietly close
-            onOpenChange(false);
+            // Ask the user for a better description instead of closing
+            setNeedsDescription(true);
             return;
           }
           setTasks(data.suggested_tasks);
           setSuggestionId(data.suggestion_id);
         },
-        onError: () => {
-          // Silently close if AI is unavailable — don't block the user
-          onOpenChange(false);
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Show actionable error — likely missing API key
+          setErrorMessage(msg);
         },
       }
     );
+  };
+
+  // Fetch suggestions when modal opens
+  useEffect(() => {
+    if (!open || !projectId) return;
+    setExtraDescription(projectDescription ?? "");
+    runSuggest(projectDescription ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
 
@@ -189,6 +199,41 @@ export const AIProjectSetupModal: React.FC<AIProjectSetupModalProps> = ({
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
               <BrainCircuit className="w-10 h-10 animate-pulse text-[#C0745F]" />
               <span className="text-sm">Generating task suggestions…</span>
+            </div>
+          ) : errorMessage ? (
+            <div className="flex flex-col gap-3 py-4">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-red-300">AI suggestions unavailable</p>
+                  <p className="text-xs text-gray-400">
+                    Your OpenAI API key is not configured. Go to{" "}
+                    <strong className="text-white">Settings → AI Agent</strong> and paste your key, then try again.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : needsDescription ? (
+            <div className="flex flex-col gap-3 py-2">
+              <p className="text-sm text-gray-400">
+                Add a short description so the AI knows what to build.
+              </p>
+              <textarea
+                rows={4}
+                value={extraDescription}
+                onChange={(e) => setExtraDescription(e.target.value)}
+                placeholder="e.g. A customer portal where users can manage subscriptions, view invoices, and submit support tickets. Needs SSO and role-based access."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#C0745F]/60 focus:ring-1 focus:ring-[#C0745F]/30 resize-none"
+              />
+              <button
+                type="button"
+                onClick={() => runSuggest(extraDescription)}
+                disabled={extraDescription.trim().length < 20}
+                className="self-start px-4 py-2 rounded-lg bg-[#C0745F] hover:bg-[#A85A45] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+              >
+                Generate suggestions
+              </button>
+              <p className="text-xs text-gray-500">Minimum 20 characters needed.</p>
             </div>
           ) : tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
