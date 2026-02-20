@@ -529,7 +529,12 @@ Rules:
                     ),
                 }
 
-            return self._cold_start_suggestion(category, {"title": title})
+            # No template data available — surface the error so the caller
+            # can show the user an actionable message (e.g. "configure your API key").
+            raise RuntimeError(
+                f"AI task generation is unavailable: {e}. "
+                "Configure your LLM API key in Settings → AI Agent and try again."
+            ) from e
 
     def _enrich_tasks_with_template(
         self,
